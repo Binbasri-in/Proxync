@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Proxync Universal One-Line Installer (Linux & macOS)
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.sh | bash -s -- --gui
+#   curl -fsSL https://proxync.dev/install.sh | bash
+#   curl -fsSL https://proxync.dev/install.sh | bash -s -- --gui
 set -euo pipefail
 
 INSTALL_GUI=false

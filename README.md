@@ -62,6 +62,24 @@ Proxync is engineered with [Tauri v2](https://v2.tauri.app/) and Rust for minima
 
 ---
 
+### ⚡ Quick Install (One-Liner)
+
+Install the standalone Proxync CLI directly in your terminal:
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://proxync.dev/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://proxync.dev/install.ps1 | iex
+```
+
+> *Tip: To also install the Desktop GUI application alongside the CLI, append `--gui` on Unix or `-Gui` on Windows.*
+
+---
+
 ### Get it running
 
 #### Prerequisites

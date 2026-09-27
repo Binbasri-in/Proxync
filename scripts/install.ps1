@@ -1,7 +1,7 @@
 # Proxync One-Line Installer for Windows
 # Usage:
-#   irm https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.ps1 | iex
-#   & { irm https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.ps1 } -Gui
+#   irm https://proxync.dev/install.ps1 | iex
+#   & { irm https://proxync.dev/install.ps1 } -Gui
 param(
     [switch]$Gui,
     [string]$Version = ""
