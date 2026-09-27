@@ -29,37 +29,63 @@ try {
 $ExeUrl = "https://github.com/$Repo/releases/download/$Version/proxync-windows-x86_64.exe"
 $TargetPath = Join-Path $InstallDir "proxync.exe"
 
+# Resolve possible local build locations
+$ScriptDir = $PSScriptRoot
+if (-not $ScriptDir) {
+    $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+$RepoRoot = if ($ScriptDir) { Split-Path -Parent $ScriptDir } else { (Get-Location).Path }
+$LocalBin = Join-Path $RepoRoot "packages\cli\target\release\proxync.exe"
+$LocalDebug = Join-Path $RepoRoot "packages\cli\target\debug\proxync.exe"
+
+$Installed = $false
+
 Write-Host "==> Fetching Proxync CLI ($Version)..."
 try {
     Invoke-WebRequest -Uri $ExeUrl -OutFile $TargetPath -UseBasicParsing
-    Write-Host "✓ Downloaded release binary" -ForegroundColor Green
+    Write-Host "[OK] Downloaded release binary from GitHub" -ForegroundColor Green
+    $Installed = $true
 } catch {
-    # Check if local release or debug binary exists in repo
-    $LocalBin = "packages\cli\target\release\proxync.exe"
-    $LocalDebug = "packages\cli\target\debug\proxync.exe"
+    # If GitHub download fails (pre-release or rate-limited), look for local build
     if (Test-Path $LocalBin) {
-        Copy-Item $LocalBin $TargetPath -Force
-        Write-Host "✓ Installed from local release build" -ForegroundColor Green
+        Copy-Item -Path $LocalBin -Destination $TargetPath -Force
+        Write-Host "[OK] Installed from local release build: $LocalBin" -ForegroundColor Green
+        $Installed = $true
     } elseif (Test-Path $LocalDebug) {
-        Copy-Item $LocalDebug $TargetPath -Force
-        Write-Host "✓ Installed from local debug build" -ForegroundColor Green
+        Copy-Item -Path $LocalDebug -Destination $TargetPath -Force
+        Write-Host "[OK] Installed from local debug build: $LocalDebug" -ForegroundColor Green
+        $Installed = $true
     } else {
-        Write-Host "Warning: Could not download $ExeUrl and no local binary found." -ForegroundColor Yellow
-        Write-Host "Building locally via cargo..."
-        cargo build --release --manifest-path="packages\cli\Cargo.toml"
-        Copy-Item $LocalBin $TargetPath -Force
+        $CargoToml = Join-Path $RepoRoot "packages\cli\Cargo.toml"
+        if (Test-Path $CargoToml) {
+            Write-Host "[*] Building locally via cargo..." -ForegroundColor Yellow
+            cargo build --release --manifest-path="$CargoToml"
+            if (Test-Path $LocalBin) {
+                Copy-Item -Path $LocalBin -Destination $TargetPath -Force
+                Write-Host "[OK] Built and installed release binary" -ForegroundColor Green
+                $Installed = $true
+            }
+        }
     }
+}
+
+if (-not $Installed) {
+    Write-Error "Could not install Proxync CLI. Neither remote release nor local binary was found."
+    exit 1
 }
 
 # Add to User PATH if not already present
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
-    $env:Path += ";$InstallDir"
-    Write-Host "✓ Added $InstallDir to User PATH" -ForegroundColor Green
+    $NewUserPath = if ([string]::IsNullOrEmpty($UserPath)) { $InstallDir } else { "$UserPath;$InstallDir" }
+    [Environment]::SetEnvironmentVariable("Path", $NewUserPath, "User")
+    $env:Path = "$env:Path;$InstallDir"
+    Write-Host "[OK] Added $InstallDir to User PATH" -ForegroundColor Green
+} else {
+    Write-Host "[OK] $InstallDir is already in User PATH" -ForegroundColor Green
 }
 
-Write-Host "✓ Proxync CLI installed to $TargetPath" -ForegroundColor Green
+Write-Host "[OK] Proxync CLI installed to $TargetPath" -ForegroundColor Green
 
 # Install Desktop GUI if requested
 if ($Gui) {
@@ -71,13 +97,14 @@ if ($Gui) {
         Invoke-WebRequest -Uri $GuiInstallerUrl -OutFile $TempInstaller -UseBasicParsing
         Write-Host "==> Launching Desktop Installer..." -ForegroundColor Cyan
         Start-Process -FilePath $TempInstaller -Wait
-        Write-Host "✓ Proxync Desktop GUI installed" -ForegroundColor Green
+        Write-Host "[OK] Proxync Desktop GUI installed" -ForegroundColor Green
     } catch {
-        Write-Host "Desktop installer not yet available from GitHub releases." -ForegroundColor Yellow
-        Write-Host "You can launch GUI via dev mode: npm run dev"
+        Write-Host "[!] Desktop installer not yet available from GitHub releases." -ForegroundColor Yellow
+        Write-Host "    You can launch GUI via dev mode: npm run dev"
     }
 }
 
-Write-Host "`nAll set! Restart your terminal or run:" -ForegroundColor Green
-Write-Host "  proxync --help" -ForegroundColor Yellow
+Write-Host "`nAll set! Open a new PowerShell terminal and run:" -ForegroundColor Green
+Write-Host "  proxync doctor" -ForegroundColor Yellow
 Write-Host "  proxync scan" -ForegroundColor Yellow
+Write-Host "  proxync tunnel 3000" -ForegroundColor Yellow

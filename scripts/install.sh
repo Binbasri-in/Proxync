@@ -61,7 +61,7 @@ else
     fi
 fi
 
-echo -e "\033[1;32m✓ Proxync CLI installed to ${BIN_DIR}/proxync\033[0m"
+echo -e "\033[1;32m[OK] Proxync CLI installed to ${BIN_DIR}/proxync\033[0m"
 
 # Install Desktop GUI if requested
 if [ "${INSTALL_GUI}" = true ]; then
@@ -76,7 +76,7 @@ if [ "${INSTALL_GUI}" = true ]; then
             hdiutil attach "${TMP_DIR}/${DMG_NAME}" -nobrowse -mountpoint "${TMP_DIR}/mnt"
             cp -R "${TMP_DIR}/mnt/Proxync.app" /Applications/
             hdiutil detach "${TMP_DIR}/mnt"
-            echo -e "\033[1;32m✓ Proxync.app installed to /Applications\033[0m"
+            echo -e "\033[1;32m[OK] Proxync.app installed to /Applications\033[0m"
         else
             echo "Desktop release asset not available yet. Build locally with: npm run tauri build"
         fi
@@ -87,7 +87,7 @@ if [ "${INSTALL_GUI}" = true ]; then
         curl -fsSL "${APPIMAGE_URL}" -o "${BIN_DIR}/proxync-desktop" || true
         if [ -f "${BIN_DIR}/proxync-desktop" ]; then
             chmod +x "${BIN_DIR}/proxync-desktop"
-            echo -e "\033[1;32m✓ Proxync Desktop installed to ${BIN_DIR}/proxync-desktop\033[0m"
+            echo -e "\033[1;32m[OK] Proxync Desktop installed to ${BIN_DIR}/proxync-desktop\033[0m"
         fi
     fi
 fi
