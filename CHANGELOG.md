@@ -2,6 +2,29 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [fix/v0.2.4-version-bump] - 2026-09-27 (Workspace & Studio Version Bump to v0.2.4 for Next Release Cycle)
+- **Feature Summary**:
+  - **Comprehensive Version Bump to v0.2.4**: Synchronized workspace and package manifests (`package.json`, `packages/desktop/package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`) to version `0.2.4`.
+  - **Native HTTP Network Headers & Diagnostics**: Updated Rust client diagnostic banner in `storage.rs` to `Proxync v0.2.4 (Engine: Tauri v2.11 Core)`. Synchronized frontend diagnostic logging metadata, log session directives, and support bundle fallbacks in `App.tsx` and `logger.ts` to `v0.2.4-stable`.
+  - **UI Version Presentation Alignment**: Updated `SettingsView.tsx` default prop to `v0.2.4`, `App.tsx` update toast message (`v0.2.4`), and sidebar engine indicator (`v0.2.4-stable`).
+  - **Recon & Documentation Badge Alignment**: Updated README version shield badge and `.agents/architecture.json` static recon map to reflect version `0.2.4`.
+  - **Dependabot Semver-Major Safeguard**: Added `version-update:semver-major` ignore policy to `.github/dependabot.yml` under `/packages/desktop` to prevent automated breaking major version upgrades while preserving automated CVE and security updates.
+- **Modified Files**:
+  - `package.json`
+  - `packages/desktop/package.json`
+  - `package-lock.json`
+  - `packages/desktop/src-tauri/Cargo.toml`
+  - `packages/desktop/src-tauri/Cargo.lock`
+  - `packages/desktop/src-tauri/tauri.conf.json`
+  - `packages/desktop/src-tauri/src/storage.rs`
+  - `packages/desktop/src/App.tsx`
+  - `packages/desktop/src/lib/logger.ts`
+  - `packages/desktop/src/components/views/SettingsView.tsx`
+  - `README.md`
+  - `.github/dependabot.yml`
+  - `.agents/architecture.json`
+  - `CHANGELOG.md`
+
 ## [fix/changelog-formatting-web-rendering] - 2026-09-25 (Changelog Markdown Formatting & Web Documentation Rendering Fix)
 - **Feature Summary**:
   - **CommonMark Heading Separation**: Added missing blank lines before section headers throughout `CHANGELOG.md` (specifically before `[fix/dependency-version-bump]`, `[fix/auto-update]`, `[fix/develop-tunnel-process-teardown]`, `[fix/playground-postman-ux]`, and `[feature/develop-schema-drift-detection]`), preventing markdown parsers from swallowing ATX `##` headers into preceding list items and restoring clean rendering across the web documentation portal.
