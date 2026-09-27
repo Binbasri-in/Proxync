@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { LogicalSize } from '@tauri-apps/api/dpi';
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -348,6 +349,31 @@ export default function App() {
     // On bigger screen / maximized (>= 1024px), show full or user preference from localStorage
     return getDesktopSidebarPref();
   });
+
+  // Cross-platform OS key detection (macOS vs Windows/Linux)
+  const isMac = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return (
+      /Mac|iPod|iPhone|iPad/i.test(navigator.platform) ||
+      /Macintosh|Mac OS X/i.test(navigator.userAgent)
+    );
+  }, []);
+
+  // Enforce desktop minimum window size constraints (700x500, like Docker Desktop)
+  useEffect(() => {
+    async function enforceMinSize() {
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.setMinSize(new LogicalSize(700, 500));
+        if (typeof window !== 'undefined' && (window.innerWidth < 700 || window.innerHeight < 500)) {
+          await appWindow.setSize(new LogicalSize(Math.max(window.innerWidth, 700), Math.max(window.innerHeight, 500)));
+        }
+      } catch (e) {
+        logApp('SYSTEM', 'WARN', 'Failed to enforce window minSize constraint', e);
+      }
+    }
+    void enforceMinSize();
+  }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -2886,7 +2912,7 @@ export default function App() {
     ?? (mainView === 'process' ? 'Process' : mainView === 'postman' ? 'Playground' : mainView === 'observability' ? 'Observability' : 'Proxync');
 
   return (
-    <div className={`app-frame flex flex-col h-screen w-screen overflow-hidden bg-surface theme-${appSettings.theme ?? 'dark'}`}>
+    <div className={`app-frame flex flex-col h-screen w-screen min-w-[700px] min-h-[500px] overflow-hidden bg-surface theme-${appSettings.theme ?? 'dark'}`}>
       {/* ── Top Header Bar (48px) ── */}
       <header
         className="app-titlebar h-[48px] min-h-[48px] w-full flex items-center border-b border-outline-variant bg-surface pl-2 sm:pl-4 pr-0 justify-between select-none z-50 cursor-default"
@@ -2905,16 +2931,6 @@ export default function App() {
         }}
       >
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer shrink-0"
-            title={sidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
-          >
-            <span className="material-symbols-outlined text-[20px]">
-              {sidebarCollapsed ? 'menu_open' : 'menu'}
-            </span>
-          </button>
-
           <div className="app-brand flex items-center gap-2 shrink-0">
             <img src="/logo.svg" className="w-5 h-5 object-contain select-none" alt="Logo" />
             <span className="text-headline-sm font-bold text-on-surface hidden sm:inline">Proxync</span>
@@ -2934,8 +2950,8 @@ export default function App() {
                 setSearchOpen(true);
                 searchInputRef.current?.focus();
               }}
-              className="app-search flex items-center bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/80 w-32 sm:w-48 md:w-60 lg:w-72 transition-all cursor-text group hover:border-primary/70 hover:bg-surface-container-high shadow-sm"
-              title="Search workspaces (Ctrl+K)"
+              className="app-search flex items-center bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/80 w-48 sm:w-64 md:w-80 lg:w-96 transition-all cursor-text group hover:border-primary/70 hover:bg-surface-container-high shadow-sm"
+              title={`Search workspaces (${isMac ? '⌘K' : 'Ctrl+K'})`}
             >
               <span className="material-symbols-outlined text-on-surface-variant text-[18px] mr-1.5 shrink-0 group-hover:text-primary transition-colors">search</span>
               <input
@@ -2981,7 +2997,7 @@ export default function App() {
                   }
                 }}
               />
-              {searchQuery && (
+              {searchQuery ? (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -2989,17 +3005,29 @@ export default function App() {
                     setSearchQuery('');
                     searchInputRef.current?.focus();
                   }}
-                  className="text-outline hover:text-on-surface transition-colors cursor-pointer text-[14px] ml-1 shrink-0"
+                  className="text-outline hover:text-on-surface transition-colors cursor-pointer text-[14px] ml-1 shrink-0 flex items-center justify-center p-0.5 rounded hover:bg-surface-container-highest"
                   title="Clear search"
+                  aria-label="Clear search"
                 >
                   <span className="material-symbols-outlined text-[14px]">close</span>
                 </button>
+              ) : (
+                <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-on-surface-variant/75 bg-surface-container-highest/80 border border-outline-variant/60 rounded shadow-xs select-none shrink-0 group-hover:border-primary/40 group-hover:text-primary transition-colors ml-1.5 pointer-events-none">
+                  {isMac ? (
+                    <>
+                      <span className="text-[11px] leading-none">⌘</span>
+                      <span>K</span>
+                    </>
+                  ) : (
+                    <span>Ctrl+K</span>
+                  )}
+                </kbd>
               )}
             </div>
 
             {/* Workspaces Search Dropdown */}
             {searchOpen && (
-              <div className="absolute top-full left-0 mt-2 w-72 sm:w-80 md:w-96 bg-surface-container-high/95 border border-outline-variant/80 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="absolute top-full left-0 mt-2 w-full min-w-[320px] bg-surface-container-high/95 border border-outline-variant/80 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="flex items-center justify-between px-3.5 py-2 border-b border-outline-variant/40 bg-surface-container/50">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/80">
                     Workspaces ({searchedWorkspaces.length})
@@ -3197,17 +3225,34 @@ export default function App() {
         {/* ── Sidebar (260px or 68px) ── */}
         <aside className={`app-sidebar ${sidebarCollapsed ? 'w-[52px] min-w-[52px]' : 'w-[240px] md:w-[260px] min-w-[240px] md:min-w-[260px]'} flex flex-col py-3 bg-surface-container-low border-r border-outline-variant z-40 transition-all overflow-hidden`}>
           {!sidebarCollapsed ? (
-            <div className="px-6 mb-5">
-              <h2 className="text-headline-sm font-bold text-primary truncate">Proxync Engine</h2>
-              <p className="text-code-sm text-on-surface-variant opacity-60">v0.2.4-stable</p>
+            <div className="pl-6 pr-4 mb-5 flex items-center justify-between">
+              <div className="min-w-0 pr-2">
+                <h2 className="text-headline-sm font-bold text-primary truncate">Proxync Engine</h2>
+                <p className="text-code-sm text-on-surface-variant opacity-60">v0.2.4-stable</p>
+              </div>
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer shrink-0"
+                title="Collapse sidebar (Ctrl+B)"
+                aria-label="Collapse sidebar"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  menu
+                </span>
+              </button>
             </div>
           ) : (
             <div className="flex flex-col items-center mb-4">
-              <span
-                className="material-symbols-outlined text-primary text-[20px] cursor-pointer hover:text-secondary transition-colors"
-                title="Workspace Dashboard"
-                onClick={() => setMainView('workspace_dashboard')}
-              >hub</span>
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer flex items-center justify-center"
+                title="Expand sidebar (Ctrl+B)"
+                aria-label="Expand sidebar"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  menu_open
+                </span>
+              </button>
             </div>
           )}
 
