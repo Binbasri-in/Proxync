@@ -24,6 +24,9 @@
   },
   "bundle": {
     "active": true,
+    "resources": [
+      "bin/*"
+    ],
     "publisher": "Inilax",
     "copyright": "Copyright © 2026 Inilax",
     "licenseFile": "LICENSE",

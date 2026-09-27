@@ -9,3 +9,4 @@ pub mod proxy;
 pub mod tunnel;
 pub mod http;
 pub mod storage;
+pub mod cli_installer;

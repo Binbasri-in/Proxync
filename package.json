@@ -10,7 +10,7 @@
     "dev": "npm run dev --workspace=packages/desktop",
     "build": "npm run build --workspace=packages/desktop",
     "build:cli": "cargo build --release --manifest-path=packages/cli/Cargo.toml",
-    "build:all": "npm run build && npm run build:cli",
+    "build:all": "npm run build && npm run build:cli && node scripts/stage-cli.js",
     "test:core": "cargo test --manifest-path=packages/core/Cargo.toml",
     "test:cli": "cargo test --manifest-path=packages/cli/Cargo.toml",
     "test:desktop": "cargo test --manifest-path=packages/desktop/src-tauri/Cargo.toml",

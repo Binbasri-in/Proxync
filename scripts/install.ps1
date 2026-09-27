@@ -3,7 +3,8 @@
 #   irm https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.ps1 | iex
 #   & { irm https://raw.githubusercontent.com/Inilax/Proxync/main/scripts/install.ps1 } -Gui
 param(
-    [switch]$Gui
+    [switch]$Gui,
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,17 +17,11 @@ if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-$Version = "v0.2.4"
-try {
-    $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
-    if ($Release.tag_name) {
-        $Version = $Release.tag_name
-    }
-} catch {
-    # Fallback to default version if API is rate limited
+$ExeUrl = if ($Version) {
+    "https://github.com/$Repo/releases/download/$Version/proxync-windows-x86_64.exe"
+} else {
+    "https://github.com/$Repo/releases/latest/download/proxync-windows-x86_64.exe"
 }
-
-$ExeUrl = "https://github.com/$Repo/releases/download/$Version/proxync-windows-x86_64.exe"
 $TargetPath = Join-Path $InstallDir "proxync.exe"
 
 # Resolve possible local build locations

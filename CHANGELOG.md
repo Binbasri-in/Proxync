@@ -2,6 +2,35 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-09-27 (Cross-Platform PATH Installer, Studio Settings Integration & Production Release Bundling)
+- **Feature Summary**:
+  - **Cross-Platform PATH Installation Engine (`proxync-core/cli_installer.rs`)**: Implemented robust CLI discovery, status inspection, and environment registration across Windows, macOS, and Linux. Supports non-elevated User PATH registration via .NET on Windows (`[Environment]::SetEnvironmentVariable`) and standard XDG/symlink placement (`~/.local/bin`, `/usr/local/bin`) on Unix.
+  - **Desktop GUI Settings Integration (`SettingsView.tsx` & `cli.rs`)**: Added an in-app "Terminal Companion (CLI)" management card displaying live installation status (`In PATH` vs `Not in PATH`), executable location, and 1-click `Install to PATH` / `Uninstall` action buttons.
+  - **Desktop GUI vs CLI Binary Isolation**: Added strict `is_desktop_binary()` filtering gate ensuring Tauri's desktop application executable (~15-27MB) is never confused with the standalone CLI companion (~7.5MB) during candidate discovery or installation.
+  - **CLI Self-Registration (`proxync setup-path`)**: Added `setup-path` (alias `install`) subcommand allowing terminal users to self-register Proxync in their environment without opening the GUI.
+  - **Production Release Bundling & CI/CD Packaging**: Configured Tauri bundle resources (`bin/*`) and automated release pipeline in `release.yml` to compile the CLI across Windows, macOS (universal binary via `lipo`), and Linux, bundling it into installers and uploading standalone CLI archives.
+  - **Resilient Installer Scripts**: Enhanced `scripts/install.sh` and `scripts/install.ps1` to download directly from GitHub's native `releases/latest/download` URL, avoiding unauthenticated API rate limits and adding `--version` custom pinning support.
+- **Modified Files**:
+  - `.github/workflows/release.yml`
+  - `package.json`
+  - `packages/cli/Cargo.lock`
+  - `packages/cli/src/main.rs`
+  - `packages/core/Cargo.lock`
+  - `packages/core/src/lib.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `packages/desktop/src-tauri/.gitignore`
+  - `packages/desktop/src-tauri/Cargo.toml`
+  - `packages/desktop/src-tauri/bin/.gitkeep`
+  - `packages/desktop/src-tauri/src/cli.rs`
+  - `packages/desktop/src-tauri/src/lib.rs`
+  - `packages/desktop/src-tauri/tauri.conf.json`
+  - `packages/desktop/src/components/views/SettingsView.tsx`
+  - `packages/desktop/src/lib/cliInstaller.ts`
+  - `scripts/install.ps1`
+  - `scripts/install.sh`
+  - `scripts/stage-cli.js`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-09-27 (Lightweight Multi-OS CLI Companion, Shared Core Architecture & One-Line Installers)
 - **Feature Summary**:
   - **Shared Core Domain Library (`proxync-core`)**: Extracted all business logic (reconnaissance, port discovery, process fingerprinting, TCP/HTTP probing, proxy interception, cloudflare/native/relay tunneling, and diagnostic storage) from desktop Tauri dependencies into a shared workspace library crate (`packages/core`). Introduced decoupled broadcast channels (`ProxyncEvent`, `EventSender`) replacing platform-specific GUI event emitters.

@@ -211,6 +211,29 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Build and Bundle CLI companion
+        shell: bash
+        run: |
+          mkdir -p packages/desktop/src-tauri/bin
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            cargo build --release --manifest-path=packages/cli/Cargo.toml
+            cp packages/cli/target/release/proxync.exe packages/desktop/src-tauri/bin/proxync.exe
+            cp packages/cli/target/release/proxync.exe proxync-windows-x86_64.exe
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            cargo build --release --manifest-path=packages/cli/Cargo.toml --target aarch64-apple-darwin
+            cargo build --release --manifest-path=packages/cli/Cargo.toml --target x86_64-apple-darwin
+            lipo -create -output packages/desktop/src-tauri/bin/proxync \
+              packages/cli/target/aarch64-apple-darwin/release/proxync \
+              packages/cli/target/x86_64-apple-darwin/release/proxync
+            chmod +x packages/desktop/src-tauri/bin/proxync
+            tar -czf proxync-darwin-universal.tar.gz -C packages/desktop/src-tauri/bin proxync
+          else
+            cargo build --release --manifest-path=packages/cli/Cargo.toml
+            cp packages/cli/target/release/proxync packages/desktop/src-tauri/bin/proxync
+            chmod +x packages/desktop/src-tauri/bin/proxync
+            tar -czf proxync-linux-x86_64.tar.gz -C packages/desktop/src-tauri/bin proxync
+          fi
+
       - name: Build app and publish GitHub Release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
@@ -227,3 +250,17 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+      - name: Upload Standalone CLI Artifact to GitHub Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.prepare-tag.outputs.tag }}"
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            gh release upload "$TAG" proxync-windows-x86_64.exe --clobber
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            gh release upload "$TAG" proxync-darwin-universal.tar.gz --clobber
+          else
+            gh release upload "$TAG" proxync-linux-x86_64.tar.gz --clobber
+          fi

@@ -6,9 +6,11 @@
 set -euo pipefail
 
 INSTALL_GUI=false
+VERSION="${VERSION:-}"
 for arg in "$@"; do
     case "$arg" in
         --gui) INSTALL_GUI=true ;;
+        --version=*) VERSION="${arg#*=}" ;;
     esac
 done
 
@@ -32,16 +34,19 @@ else
     mkdir -p "${BIN_DIR}"
 fi
 
-LATEST_RELEASE="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)"
-VERSION="$(echo "${LATEST_RELEASE}" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)"
-if [ -z "${VERSION}" ]; then
-    VERSION="v0.2.4"
+if [ "${OS}" = "darwin" ]; then
+    CLI_NAME="proxync-darwin-universal"
+else
+    CLI_NAME="proxync-${OS}-${ARCH}"
 fi
 
-CLI_NAME="proxync-${OS}-${ARCH}"
-CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CLI_NAME}.tar.gz"
-
-echo "==> Fetching Proxync CLI (${VERSION})..."
+if [ -n "${VERSION}" ]; then
+    CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CLI_NAME}.tar.gz"
+    echo "==> Fetching Proxync CLI (${VERSION})..."
+else
+    CLI_URL="https://github.com/${REPO}/releases/latest/download/${CLI_NAME}.tar.gz"
+    echo "==> Fetching latest Proxync CLI..."
+fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 

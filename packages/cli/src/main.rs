@@ -38,6 +38,10 @@ enum Commands {
 
     /// Launch or locate the Proxync GUI desktop application
     Gui,
+
+    /// Register Proxync CLI in your system terminal environment (PATH)
+    #[command(alias = "install")]
+    SetupPath,
 }
 
 #[derive(Args, Debug)]
@@ -108,6 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Proxy(args)) => handle_proxy(args).await?,
         Some(Commands::Doctor) => handle_doctor()?,
         Some(Commands::Gui) => launch_gui(),
+        Some(Commands::SetupPath) => handle_setup_path()?,
         None => {
             // Default interactive behavior: show quick scan if no args provided
             println!("\x1b[1;36mProxync\x1b[0m — Developer Tunneling & Reconnaissance CLI");
@@ -116,6 +121,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+fn handle_setup_path() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\x1b[1;36m==> Configuring Proxync CLI in system environment (PATH)...\x1b[0m");
+    let msg = proxync_core::cli_installer::install_cli_to_path()
+        .map_err(|e| format!("Failed to configure PATH: {}", e))?;
+    println!("\x1b[1;32m[OK] {}\x1b[0m", msg);
+    println!("\nRestart your terminal to use \x1b[1mproxync\x1b[0m from any directory!");
     Ok(())
 }
 

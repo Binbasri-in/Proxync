@@ -10,6 +10,12 @@ import {
   exportSupportBundle,
   type LogsSummary,
 } from '../../lib/logger';
+import {
+  checkCliStatus,
+  installCliToPath,
+  uninstallCliFromPath,
+  type CliStatus,
+} from '../../lib/cliInstaller';
 
 export function SettingsView({
   workspace,
@@ -73,6 +79,8 @@ export function SettingsView({
   const [activeSection, setActiveSection] = useState<'general' | 'networking' | 'account' | 'security' | 'domains' | 'danger'>(initialSection);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [logsSummary, setLogsSummary] = useState<LogsSummary | null>(null);
+  const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
+  const [cliBusy, setCliBusy] = useState(false);
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -81,8 +89,38 @@ export function SettingsView({
   useEffect(() => {
     if (activeSection === 'danger') {
       readLogsSummary().then(setLogsSummary).catch(() => {});
+    } else if (activeSection === 'general') {
+      checkCliStatus().then(setCliStatus).catch(() => {});
     }
   }, [activeSection, appSettings.debugLogging]);
+
+  const handleInstallCli = async () => {
+    setCliBusy(true);
+    try {
+      const msg = await installCliToPath();
+      showToast(msg, 'success');
+      const updated = await checkCliStatus();
+      setCliStatus(updated);
+    } catch (err: any) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      setCliBusy(false);
+    }
+  };
+
+  const handleUninstallCli = async () => {
+    setCliBusy(true);
+    try {
+      const msg = await uninstallCliFromPath();
+      showToast(msg, 'info');
+      const updated = await checkCliStatus();
+      setCliStatus(updated);
+    } catch (err: any) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      setCliBusy(false);
+    }
+  };
 
   const [autostart, setAutostart] = useState(false);
 
@@ -272,6 +310,68 @@ export function SettingsView({
                       <span>{checkingUpdates ? 'Checking...' : 'Check for updates'}</span>
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Terminal Companion (CLI) */}
+              <div className="p-4 bg-surface-container rounded-xl border border-outline-variant/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-body-lg text-body-lg text-on-surface">Terminal Companion (CLI)</p>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium border border-primary/30 bg-primary/10 text-primary">
+                        proxync
+                      </span>
+                    </div>
+                    <p className="text-on-surface-variant text-[13px] mt-0.5">
+                      Run public tunnels, port scans, and HTTP traffic interception directly from your shell.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {cliStatus?.is_installed ? (
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        In PATH
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Not in PATH
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-outline-variant/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 truncate max-w-md">
+                    Location: <code className="px-1.5 py-0.5 rounded bg-surface-container-high font-mono text-[11px] text-on-surface truncate">
+                      {cliStatus?.is_installed ? (cliStatus.binary_path || cliStatus.install_dir) : (cliStatus?.install_dir ? `Target: ${cliStatus.install_dir}` : 'Not installed')}
+                    </code>
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={cliBusy}
+                      onClick={handleInstallCli}
+                      className="px-3 py-1 rounded-lg bg-primary hover:bg-primary/90 text-on-primary font-medium transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50 text-xs"
+                    >
+                      <span className={`material-symbols-outlined text-[14px] ${cliBusy ? 'animate-spin' : ''}`}>
+                        {cliBusy ? 'sync' : (cliStatus?.is_installed ? 'refresh' : 'download')}
+                      </span>
+                      <span>{cliStatus?.is_installed ? 'Reinstall to PATH' : 'Install to PATH'}</span>
+                    </button>
+                    {cliStatus?.is_installed && (
+                      <button
+                        type="button"
+                        disabled={cliBusy}
+                        onClick={handleUninstallCli}
+                        className="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-error/20 text-on-surface-variant hover:text-error border border-outline-variant/30 font-medium transition-colors cursor-pointer text-xs disabled:opacity-50"
+                        title="Remove CLI binary and unlink from PATH"
+                      >
+                        Uninstall
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
