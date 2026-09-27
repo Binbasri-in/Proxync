@@ -18,66 +18,17 @@ All notable changes to the Proxync workspace studio project are documented here.
   - `packages/core/src/storage.rs`
   - `CHANGELOG.md`
 
-## [feat/cli-companion] - 2026-09-27 (Cross-Platform PATH Installer, Studio Settings Integration & Production Release Bundling)
+## [fix/sidebar-toggle-and-window-constraints] - 2026-09-28 (Sidebar Toggle Relocation, Workspace Search Shortcut Badge & Window Dimension Constraints)
 - **Feature Summary**:
-  - **Cross-Platform PATH Installation Engine (`proxync-core/cli_installer.rs`)**: Implemented robust CLI discovery, status inspection, and environment registration across Windows, macOS, and Linux. Supports non-elevated User PATH registration via .NET on Windows (`[Environment]::SetEnvironmentVariable`) and standard XDG/symlink placement (`~/.local/bin`, `/usr/local/bin`) on Unix.
-  - **Desktop GUI Settings Integration (`SettingsView.tsx` & `cli.rs`)**: Added an in-app "Terminal Companion (CLI)" management card displaying live installation status (`In PATH` vs `Not in PATH`), executable location, and 1-click `Install to PATH` / `Uninstall` action buttons.
-  - **Desktop GUI vs CLI Binary Isolation**: Added strict `is_desktop_binary()` filtering gate ensuring Tauri's desktop application executable (~15-27MB) is never confused with the standalone CLI companion (~7.5MB) during candidate discovery or installation.
-  - **CLI Self-Registration (`proxync setup-path`)**: Added `setup-path` (alias `install`) subcommand allowing terminal users to self-register Proxync in their environment without opening the GUI.
-  - **Production Release Bundling & CI/CD Packaging**: Configured Tauri bundle resources (`bin/*`) and automated release pipeline in `release.yml` to compile the CLI across Windows, macOS (universal binary via `lipo`), and Linux, bundling it into installers and uploading standalone CLI archives.
-  - **Resilient Installer Scripts**: Enhanced `scripts/install.sh` and `scripts/install.ps1` to download directly from GitHub's native `releases/latest/download` URL, avoiding unauthenticated API rate limits and adding `--version` custom pinning support.
+  - **Sidebar Toggle Repositioning**: Moved sidebar toggle button from the global titlebar to directly beside "Proxync Engine" in the sidebar header for a cleaner and more intuitive navigation flow. In collapsed mode, rendered an expand (`menu_open`) button.
+  - **Workspace Search Enhancements**: Widened the global workspace search input (`w-48 sm:w-64 md:w-80 lg:w-96`), added a platform-aware keyboard shortcut badge (`⌘K` on macOS, `Ctrl+K` on Windows/Linux), and improved clear button padding and hover feedback.
+  - **Minimum Window Constraints**: Enforced minimum window constraints (`minWidth: 700`, `minHeight: 500`) in `tauri.conf.json`, added runtime `LogicalSize` enforcement via `appWindow.setMinSize` and `appWindow.setSize` in `App.tsx`, and applied `min-w-[700px] min-h-[500px]` to the root viewport container to prevent layout degradation during aggressive window shrinking.
 - **Modified Files**:
-  - `.github/workflows/release.yml`
-  - `package.json`
-  - `packages/cli/Cargo.lock`
-  - `packages/cli/src/main.rs`
-  - `packages/core/Cargo.lock`
-  - `packages/core/src/lib.rs`
-  - `packages/core/src/cli_installer.rs`
-  - `packages/desktop/src-tauri/.gitignore`
-  - `packages/desktop/src-tauri/Cargo.toml`
-  - `packages/desktop/src-tauri/bin/.gitkeep`
-  - `packages/desktop/src-tauri/src/cli.rs`
-  - `packages/desktop/src-tauri/src/lib.rs`
   - `packages/desktop/src-tauri/tauri.conf.json`
-  - `packages/desktop/src/components/views/SettingsView.tsx`
-  - `packages/desktop/src/lib/cliInstaller.ts`
-  - `scripts/install.ps1`
-  - `scripts/install.sh`
-  - `scripts/stage-cli.js`
+  - `packages/desktop/src/App.tsx`
   - `CHANGELOG.md`
 
-## [feat/cli-companion] - 2026-09-27 (Lightweight Multi-OS CLI Companion, Shared Core Architecture & One-Line Installers)
-- **Feature Summary**:
-  - **Shared Core Domain Library (`proxync-core`)**: Extracted all business logic (reconnaissance, port discovery, process fingerprinting, TCP/HTTP probing, proxy interception, cloudflare/native/relay tunneling, and diagnostic storage) from desktop Tauri dependencies into a shared workspace library crate (`packages/core`). Introduced decoupled broadcast channels (`ProxyncEvent`, `EventSender`) replacing platform-specific GUI event emitters.
-  - **Lightweight CLI Companion (`proxync-cli`)**: Created standalone terminal executable (`proxync`) with rich subcommands: `scan` (discover dev servers/frameworks with formatted or `--json` output), `tunnel` (instant public HTTPS exposure with live request/response streaming and graceful Ctrl+C cleanup), `proxy` (HTTP traffic interception), `doctor` (toolchain and OS diagnostics), and `gui` (launching desktop application or providing download guidance).
-  - **Default Native SSH Tunnel Provider**: Set Proxync Native SSH reverse tunneling (`https://*.proxync.dev`) as the default tunnel provider for the CLI companion, automatically generating random or custom subdomains while retaining Cloudflare Quick Tunnels and Relay as configurable alternatives.
-  - **Desktop Backend Modularization**: Refactored `packages/desktop/src-tauri` (`recon.rs`, `http.rs`, `proxy.rs`, `tunnel.rs`) to delegate directly to `proxync-core` via event bridge channels, eliminating ~3,000 lines of duplicated domain code while maintaining 100% IPC compatibility.
-  - **Cross-Platform One-Line Installers & Build Automation**: Added `scripts/install.sh` (Linux/macOS) and `scripts/install.ps1` (Windows) supporting `--gui` flag for optional desktop app installation alongside standalone CLI with pure ASCII codepage hardening and context-aware `$RepoRoot` path resolution. Added root npm scripts (`build:cli`, `build:all`, `test:core`, `test:cli`, `test:desktop`, `test:all`).
-  - **CI/CD Integration**: Extended GitHub Actions CI workflow to detect changes in `packages/core` and `packages/cli` and run all crate test suites.
-- **Modified Files**:
-  - `packages/core/Cargo.toml`
-  - `packages/core/src/lib.rs`
-  - `packages/core/src/events.rs`
-  - `packages/core/src/http.rs`
-  - `packages/core/src/proxy.rs`
-  - `packages/core/src/recon.rs`
-  - `packages/core/src/storage.rs`
-  - `packages/core/src/tunnel.rs`
-  - `packages/cli/Cargo.toml`
-  - `packages/cli/src/main.rs`
-  - `packages/desktop/src-tauri/Cargo.toml`
-  - `packages/desktop/src-tauri/src/http.rs`
-  - `packages/desktop/src-tauri/src/proxy.rs`
-  - `packages/desktop/src-tauri/src/recon.rs`
-  - `packages/desktop/src-tauri/src/tunnel.rs`
-  - `scripts/install.sh`
-  - `scripts/install.ps1`
-  - `package.json`
-  - `.github/workflows/ci.yml`
-  - `CHANGELOG.md`
-
-## [fix/v0.2.4-version-bump] - 2026-09-27 (Workspace & Studio Version Bump to v0.2.4 for Next Release Cycle)
+## [feat/cli-companion] - 2026-09-27 (Cross-Platform PATH Installer, Studio Settings Integration & Production Release Bundling)
 - **Feature Summary**:
   - **Comprehensive Version Bump to v0.2.4**: Synchronized workspace and package manifests (`package.json`, `packages/desktop/package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`) to version `0.2.4`.
   - **Native HTTP Network Headers & Diagnostics**: Updated Rust client diagnostic banner in `storage.rs` to `Proxync v0.2.4 (Engine: Tauri v2.11 Core)`. Synchronized frontend diagnostic logging metadata, log session directives, and support bundle fallbacks in `App.tsx` and `logger.ts` to `v0.2.4-stable`.
