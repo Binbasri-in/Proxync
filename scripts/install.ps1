@@ -64,7 +64,8 @@ Write-Host "✓ Proxync CLI installed to $TargetPath" -ForegroundColor Green
 # Install Desktop GUI if requested
 if ($Gui) {
     Write-Host "==> Fetching Proxync Desktop GUI Installer..." -ForegroundColor Cyan
-    $GuiInstallerUrl = "https://github.com/$Repo/releases/download/$Version/Proxync_${Version}_x64-setup.exe"
+    $VerNum = $Version.TrimStart('v')
+    $GuiInstallerUrl = "https://github.com/$Repo/releases/download/$Version/Proxync_${VerNum}_x64-setup.exe"
     $TempInstaller = Join-Path $env:TEMP "proxync-gui-setup.exe"
     try {
         Invoke-WebRequest -Uri $GuiInstallerUrl -OutFile $TempInstaller -UseBasicParsing

@@ -33,7 +33,10 @@ else
 fi
 
 LATEST_RELEASE="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)"
-VERSION="$(echo "${LATEST_RELEASE}" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v0.2.4")"
+VERSION="$(echo "${LATEST_RELEASE}" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)"
+if [ -z "${VERSION}" ]; then
+    VERSION="v0.2.4"
+fi
 
 CLI_NAME="proxync-${OS}-${ARCH}"
 CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CLI_NAME}.tar.gz"
@@ -69,6 +72,7 @@ if [ "${INSTALL_GUI}" = true ]; then
         echo "Downloading ${DMG_URL}..."
         curl -fsSL "${DMG_URL}" -o "${TMP_DIR}/${DMG_NAME}" || true
         if [ -f "${TMP_DIR}/${DMG_NAME}" ]; then
+            mkdir -p "${TMP_DIR}/mnt"
             hdiutil attach "${TMP_DIR}/${DMG_NAME}" -nobrowse -mountpoint "${TMP_DIR}/mnt"
             cp -R "${TMP_DIR}/mnt/Proxync.app" /Applications/
             hdiutil detach "${TMP_DIR}/mnt"
