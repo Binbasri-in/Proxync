@@ -3094,6 +3094,7 @@ dependencies = [
  "futures-util",
  "lazy_static",
  "os_info",
+ "proxync-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -3105,6 +3106,21 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "proxync-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "futures-util",
+ "lazy_static",
+ "os_info",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "tokio-tungstenite",
 ]
