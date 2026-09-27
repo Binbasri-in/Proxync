@@ -42,7 +42,7 @@ fn get_data_filepath() -> std::path::PathBuf {
     dir
 }
 
-fn get_logs_dir() -> std::path::PathBuf {
+pub fn get_logs_dir() -> std::path::PathBuf {
     let mut dir = get_base_data_dir();
     dir.push("logs");
     let _ = std::fs::create_dir_all(&dir);
@@ -85,6 +85,7 @@ pub async fn append_log_entry(category: String, line: String) -> Result<(), Stri
     let logs_dir = get_logs_dir();
     let (filename, max_bytes, is_app_log) = match category.as_str() {
         "traffic" => ("traffic.log", MAX_TRAFFIC_LOG_BYTES, false),
+        "cli" => ("cli.log", MAX_APP_LOG_BYTES, false),
         _ => ("app.log", MAX_APP_LOG_BYTES, true),
     };
     let file_path = logs_dir.join(filename);
@@ -105,11 +106,14 @@ pub fn clear_log_files_at(logs_dir: &std::path::Path) -> Result<(), String> {
     let _ = std::fs::create_dir_all(logs_dir);
     let app_log = logs_dir.join("app.log");
     let traffic_log = logs_dir.join("traffic.log");
+    let cli_log = logs_dir.join("cli.log");
     let _ = std::fs::write(&traffic_log, "");
+    let _ = std::fs::write(&cli_log, "");
 
     // Clean up archive files if present
     let _ = std::fs::remove_file(logs_dir.join("app.log.old"));
     let _ = std::fs::remove_file(logs_dir.join("traffic.log.old"));
+    let _ = std::fs::remove_file(logs_dir.join("cli.log.old"));
 
     let now = get_current_iso_timestamp();
     let banner = build_system_banner(Some(&now));
@@ -648,7 +652,7 @@ pub fn get_system_info_sync() -> SystemInfo {
     }
 }
 
-fn get_current_iso_timestamp() -> String {
+pub fn get_current_iso_timestamp() -> String {
     let now = std::time::SystemTime::now();
     let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let secs = duration.as_secs();

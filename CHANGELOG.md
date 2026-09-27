@@ -2,6 +2,22 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-09-27 (Static Directory Serving, Half-Block QR Codes, Live Proxy Capture, Hotkeys & Parity)
+- **Feature Summary**:
+  - **Static Directory Serving (`proxync serve [PATH]`)**: Added built-in static web server with automatic ephemeral port binding, MIME type resolution, directory traversal protection (`starts_with(&root)`), SPA routing fallback to `index.html`, and instant public tunneling.
+  - **Compact Half-Block Unicode QR Code (`--qr` & `q` key)**: Integrated `Dense1x2` Unicode half-block rendering (`▀`, `▄`, `█`, ` `) from the `qrcode` crate, reducing QR terminal footprint by 50% in both height (19 lines) and width (37 columns) for instant mobile scanning without terminal scrolling.
+  - **Live HTTP Traffic Interception**: Interposed `proxync_core::proxy::start_proxy` into the public tunnel path, ensuring all incoming tunnel traffic across Native SSH, Cloudflare, and Relay is captured, measured in live stats, and streamed in real-time (`--> GET /path`, `<-- 200 (8ms)`).
+  - **Interactive Terminal Hotkeys & Persistent Option Bar**: Added non-blocking hotkey listener with single-key shortcuts: `c` (copy URL to clipboard), `q` (display QR code), `s` (live request metrics & latency), `t` (mute/unmute traffic stream), `l` (clear screen), and `h`/`?` (help). Automatically re-prints the hotkey bar after every action to eliminate scroll fatigue.
+  - **Auto-Clipboard URL Copy**: Silently copies public tunnel URL to system clipboard upon connection across Windows (`clip` with hidden window flags), macOS (`pbcopy`), and Linux (`wl-copy`/`xclip`).
+  - **CLI Session Logs (`proxync logs`)**: Added logs inspection subcommand supporting last `-n` lines, real-time follow/streaming (`-f`/`--tail`), and log clearing (`--clear`) with automatic 5MB rotation in `proxync-core/storage.rs`.
+  - **Desktop Subdomain Parity**: Enforced strict parity with the Desktop application by removing custom `--subdomain` flag from the CLI, guaranteeing Native SSH tunnels assign secure, collision-free automatic subdomains (`px-*`).
+- **Modified Files**:
+  - `packages/cli/Cargo.lock`
+  - `packages/cli/Cargo.toml`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/storage.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-09-27 (Cross-Platform PATH Installer, Studio Settings Integration & Production Release Bundling)
 - **Feature Summary**:
   - **Cross-Platform PATH Installation Engine (`proxync-core/cli_installer.rs`)**: Implemented robust CLI discovery, status inspection, and environment registration across Windows, macOS, and Linux. Supports non-elevated User PATH registration via .NET on Windows (`[Environment]::SetEnvironmentVariable`) and standard XDG/symlink placement (`~/.local/bin`, `/usr/local/bin`) on Unix.
