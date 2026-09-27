@@ -2,6 +2,17 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-09-27 (Cross-Platform Windows Installation & Git Bash Installer Support)
+- **Feature Summary**:
+  - **Git Bash & MSYS2 Installer (`scripts/install.sh`)**: Added platform detection for `mingw*`, `msys*`, and `cygwin*` to download `proxync-windows-x86_64.exe` directly on Windows, installing into `%LOCALAPPDATA%\Programs\Proxync\bin\` and invoking `setup-path` to register in the Windows User `PATH`.
+  - **Standalone Binary Self-Registration (`packages/core/src/cli_installer.rs`)**: Updated `find_source_cli_binary()` to recognize when `current_exe` is already a standalone `proxync.exe`, allowing users to download the `.exe` directly via curl/browser and run `proxync.exe setup-path` from anywhere.
+  - **Windows Command Prompt & Built-in curl Documentation (`README.md`)**: Added explicit one-liner installation documentation for PowerShell (`irm ... | iex`), CMD bridge (`powershell -c "irm ... | iex"`), and native Windows `curl.exe` with `setup-path`.
+- **Modified Files**:
+  - `README.md`
+  - `packages/core/src/cli_installer.rs`
+  - `scripts/install.sh`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-09-27 (Static Directory Serving, Half-Block QR Codes, Live Proxy Capture, Hotkeys & Parity)
 - **Feature Summary**:
   - **Static Directory Serving (`proxync serve [PATH]`)**: Added built-in static web server with automatic ephemeral port binding, MIME type resolution, directory traversal protection (`starts_with(&root)`), SPA routing fallback to `index.html`, and instant public tunneling.

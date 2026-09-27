@@ -76,6 +76,16 @@ curl -fsSL https://proxync.dev/install.sh | bash
 irm https://proxync.dev/install.ps1 | iex
 ```
 
+**Windows (Command Prompt / CMD):**
+```cmd
+powershell -c "irm https://proxync.dev/install.ps1 | iex"
+```
+
+**Windows (via built-in curl):**
+```cmd
+curl -fsSL https://proxync.dev/download/cli/windows -o proxync.exe && proxync.exe setup-path
+```
+
 > *Tip: To also install the Desktop GUI application alongside the CLI, append `--gui` on Unix or `-Gui` on Windows.*
 
 ---

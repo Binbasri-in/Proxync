@@ -24,49 +24,92 @@ case "$ARCH" in
     *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
 
+IS_WINDOWS=false
+BIN_NAME="proxync"
+
+case "${OS}" in
+    darwin*)
+        CLI_ASSET="proxync-darwin-universal.tar.gz"
+        IS_ARCHIVE=true
+        ;;
+    linux*)
+        CLI_ASSET="proxync-linux-${ARCH}.tar.gz"
+        IS_ARCHIVE=true
+        ;;
+    mingw*|msys*|cygwin*)
+        CLI_ASSET="proxync-windows-${ARCH}.exe"
+        IS_ARCHIVE=false
+        IS_WINDOWS=true
+        BIN_NAME="proxync.exe"
+        ;;
+    *)
+        echo "Unsupported operating system: ${OS}" >&2
+        exit 1
+        ;;
+esac
+
 echo -e "\033[1;36m==> Installing Proxync for ${OS}-${ARCH}...\033[0m"
 
 # Target installation directory for CLI
-if [ -w "/usr/local/bin" ]; then
+if [ "${IS_WINDOWS}" = true ] && [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
+    BIN_DIR="$(cygpath -u "${LOCALAPPDATA}")/Programs/Proxync/bin"
+    mkdir -p "${BIN_DIR}"
+elif [ -w "/usr/local/bin" ]; then
     BIN_DIR="/usr/local/bin"
 else
     BIN_DIR="${HOME}/.local/bin"
     mkdir -p "${BIN_DIR}"
 fi
 
-if [ "${OS}" = "darwin" ]; then
-    CLI_NAME="proxync-darwin-universal"
-else
-    CLI_NAME="proxync-${OS}-${ARCH}"
-fi
-
 if [ -n "${VERSION}" ]; then
-    CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CLI_NAME}.tar.gz"
+    CLI_URL="https://github.com/${REPO}/releases/download/${VERSION}/${CLI_ASSET}"
     echo "==> Fetching Proxync CLI (${VERSION})..."
 else
-    CLI_URL="https://github.com/${REPO}/releases/latest/download/${CLI_NAME}.tar.gz"
+    CLI_URL="https://github.com/${REPO}/releases/latest/download/${CLI_ASSET}"
     echo "==> Fetching latest Proxync CLI..."
 fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
-if curl -fsSL "${CLI_URL}" -o "${TMP_DIR}/proxync.tar.gz" 2>/dev/null; then
-    tar -xzf "${TMP_DIR}/proxync.tar.gz" -C "${TMP_DIR}"
-    chmod +x "${TMP_DIR}/proxync"
-    mv "${TMP_DIR}/proxync" "${BIN_DIR}/proxync"
-else
-    # Fallback to local cargo build if running in cloned repo
-    if [ -f "packages/cli/Cargo.toml" ]; then
-        echo "Release asset not found. Building locally via cargo..."
-        cargo build --release --manifest-path="packages/cli/Cargo.toml"
-        cp "packages/cli/target/release/proxync" "${BIN_DIR}/proxync"
+if [ "${IS_ARCHIVE}" = true ]; then
+    if curl -fsSL "${CLI_URL}" -o "${TMP_DIR}/proxync.tar.gz" 2>/dev/null; then
+        tar -xzf "${TMP_DIR}/proxync.tar.gz" -C "${TMP_DIR}"
+        chmod +x "${TMP_DIR}/${BIN_NAME}"
+        mv "${TMP_DIR}/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
     else
-        echo "Error: Could not download release binary from ${CLI_URL}" >&2
-        exit 1
+        # Fallback to local cargo build if running in cloned repo
+        if [ -f "packages/cli/Cargo.toml" ]; then
+            echo "Release asset not found. Building locally via cargo..."
+            cargo build --release --manifest-path="packages/cli/Cargo.toml"
+            cp "packages/cli/target/release/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
+        else
+            echo "Error: Could not download release archive from ${CLI_URL}" >&2
+            exit 1
+        fi
+    fi
+else
+    # Standalone binary (.exe on Windows)
+    if curl -fsSL "${CLI_URL}" -o "${TMP_DIR}/${BIN_NAME}" 2>/dev/null; then
+        chmod +x "${TMP_DIR}/${BIN_NAME}"
+        mv "${TMP_DIR}/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
+    else
+        if [ -f "packages/cli/Cargo.toml" ]; then
+            echo "Release asset not found. Building locally via cargo..."
+            cargo build --release --manifest-path="packages/cli/Cargo.toml"
+            cp "packages/cli/target/release/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
+        else
+            echo "Error: Could not download release binary from ${CLI_URL}" >&2
+            exit 1
+        fi
     fi
 fi
 
-echo -e "\033[1;32m[OK] Proxync CLI installed to ${BIN_DIR}/proxync\033[0m"
+# Run setup-path on Windows to register PATH in registry
+if [ "${IS_WINDOWS}" = true ]; then
+    "${BIN_DIR}/${BIN_NAME}" setup-path >/dev/null 2>&1 || true
+fi
+
+echo -e "\033[1;32m[OK] Proxync CLI installed to ${BIN_DIR}/${BIN_NAME}\033[0m"
 
 # Install Desktop GUI if requested
 if [ "${INSTALL_GUI}" = true ]; then

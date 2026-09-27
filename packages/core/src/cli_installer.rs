@@ -127,7 +127,21 @@ pub fn find_source_cli_binary() -> Option<PathBuf> {
         }
     }
 
-    // 2. Walk up from current_exe to locate packaged resources, bin, or dev targets
+    // 2. If current_exe is already the standalone proxync binary, use it directly
+    if let Some(ref exe_path) = current_exe {
+        if exe_path.is_file() && !is_desktop_binary(exe_path, None) {
+            let is_match = exe_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|name| name.eq_ignore_ascii_case(bin_name))
+                .unwrap_or(false);
+            if is_match {
+                return Some(exe_path.clone());
+            }
+        }
+    }
+
+    // 3. Walk up from current_exe to locate packaged resources, bin, or dev targets
     if let Some(ref exe_path) = current_exe {
         let mut curr: Option<&Path> = exe_path.parent();
         while let Some(parent) = curr {
