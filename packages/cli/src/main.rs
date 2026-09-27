@@ -3,8 +3,6 @@ use proxync_core::events::{create_event_channel, ProxyncEvent};
 use proxync_core::recon::scan_processes;
 use proxync_core::storage::get_system_info_sync;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -206,15 +204,12 @@ async fn handle_tunnel(args: TunnelArgs) -> Result<(), Box<dyn std::error::Error
     println!("  Public URL   : \x1b[1;34;4m{}\x1b[0m", public_url);
     println!("\nListening for incoming traffic (Press \x1b[1mCtrl+C\x1b[0m to quit)...\n");
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
     // Event listener task for live request logging
     let event_task = tokio::spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             match event {
                 ProxyncEvent::RequestLog { method, path, timestamp: _, .. } => {
-                    print!("\x1b[1;33m--> {:<6}\x1b[0m {}\n", method, path);
+                    println!("\x1b[1;33m--> {:<6}\x1b[0m {}", method, path);
                 }
                 ProxyncEvent::ResponseLog { status, duration_ms, .. } => {
                     let status_color = if status < 400 { "\x1b[1;32m" } else { "\x1b[1;31m" };
@@ -238,7 +233,6 @@ async fn handle_tunnel(args: TunnelArgs) -> Result<(), Box<dyn std::error::Error
         _ = event_task => {}
     }
 
-    r.store(false, Ordering::SeqCst);
     let _ = proxync_core::tunnel::close_tunnel(tunnel_id, Some(args.port)).await;
     println!("\x1b[32m✓ Tunnel closed cleanly.\x1b[0m");
 
@@ -340,10 +334,11 @@ fn launch_gui() {
     #[cfg(target_os = "windows")]
     {
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
         let possible_paths = [
             format!("{}\\Programs\\Proxync\\Proxync.exe", local_app_data),
             format!("{}\\Proxync\\Proxync.exe", local_app_data),
-            "C:\\Program Files\\Proxync\\Proxync.exe".to_string(),
+            format!("{}\\Proxync\\Proxync.exe", program_files),
         ];
 
         for p in &possible_paths {
