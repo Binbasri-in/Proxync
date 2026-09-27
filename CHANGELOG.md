@@ -2,6 +2,35 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-09-27 (Lightweight Multi-OS CLI Companion, Shared Core Architecture & One-Line Installers)
+- **Feature Summary**:
+  - **Shared Core Domain Library (`proxync-core`)**: Extracted all business logic (reconnaissance, port discovery, process fingerprinting, TCP/HTTP probing, proxy interception, cloudflare/native/relay tunneling, and diagnostic storage) from desktop Tauri dependencies into a shared workspace library crate (`packages/core`). Introduced decoupled broadcast channels (`ProxyncEvent`, `EventSender`) replacing platform-specific GUI event emitters.
+  - **Lightweight CLI Companion (`proxync-cli`)**: Created standalone terminal executable (`proxync`) with rich subcommands: `scan` (discover dev servers/frameworks with formatted or `--json` output), `tunnel` (instant public HTTPS exposure with live request/response streaming and graceful Ctrl+C cleanup), `proxy` (HTTP traffic interception), `doctor` (toolchain and OS diagnostics), and `gui` (launching desktop application or providing download guidance).
+  - **Desktop Backend Modularization**: Refactored `packages/desktop/src-tauri` (`recon.rs`, `http.rs`, `proxy.rs`, `tunnel.rs`) to delegate directly to `proxync-core` via event bridge channels, eliminating ~3,000 lines of duplicated domain code while maintaining 100% IPC compatibility.
+  - **Cross-Platform One-Line Installers**: Added `scripts/install.sh` (Linux/macOS) and `scripts/install.ps1` (Windows) supporting `--gui` flag for optional desktop app installation alongside standalone CLI. Added root npm scripts (`build:cli`, `test:core`, `test:cli`, `test:desktop`, `test:all`).
+  - **CI/CD Integration**: Extended GitHub Actions CI workflow to detect changes in `packages/core` and `packages/cli` and run all crate test suites.
+- **Modified Files**:
+  - `packages/core/Cargo.toml`
+  - `packages/core/src/lib.rs`
+  - `packages/core/src/events.rs`
+  - `packages/core/src/http.rs`
+  - `packages/core/src/proxy.rs`
+  - `packages/core/src/recon.rs`
+  - `packages/core/src/storage.rs`
+  - `packages/core/src/tunnel.rs`
+  - `packages/cli/Cargo.toml`
+  - `packages/cli/src/main.rs`
+  - `packages/desktop/src-tauri/Cargo.toml`
+  - `packages/desktop/src-tauri/src/http.rs`
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/desktop/src-tauri/src/recon.rs`
+  - `packages/desktop/src-tauri/src/tunnel.rs`
+  - `scripts/install.sh`
+  - `scripts/install.ps1`
+  - `package.json`
+  - `.github/workflows/ci.yml`
+  - `CHANGELOG.md`
+
 ## [fix/v0.2.4-version-bump] - 2026-09-27 (Workspace & Studio Version Bump to v0.2.4 for Next Release Cycle)
 - **Feature Summary**:
   - **Comprehensive Version Bump to v0.2.4**: Synchronized workspace and package manifests (`package.json`, `packages/desktop/package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`) to version `0.2.4`.
