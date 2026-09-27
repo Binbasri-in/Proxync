@@ -53,10 +53,10 @@ struct ScanArgs {
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum Provider {
-    /// Fast public tunnel via Cloudflare Quick Tunnels (default, zero sign-up)
-    Cloudflare,
-    /// Direct SSH reverse tunnel with custom or auto subdomain
+    /// Direct SSH reverse tunnel to Proxync edge with custom or auto subdomain (default)
     Native,
+    /// Fast public tunnel via Cloudflare Quick Tunnels (zero sign-up)
+    Cloudflare,
     /// Proxync self-hosted WebSocket relay
     Relay,
 }
@@ -67,7 +67,7 @@ struct TunnelArgs {
     port: u16,
 
     /// Tunnel provider to use
-    #[arg(short, long, value_enum, default_value_t = Provider::Cloudflare)]
+    #[arg(short, long, value_enum, default_value_t = Provider::Native)]
     provider: Provider,
 
     /// Custom subdomain for native SSH tunnel (e.g., 'myapp' -> myapp.proxync.dev)
@@ -384,6 +384,20 @@ fn truncate_str(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cli_parsing_tunnel_default_provider() {
+        let args = ["proxync", "tunnel", "3000"];
+        let cli = Cli::try_parse_from(args).expect("parse cli");
+        match cli.command {
+            Some(Commands::Tunnel(t)) => {
+                assert_eq!(t.port, 3000);
+                assert_eq!(t.provider, Provider::Native);
+                assert_eq!(t.subdomain, None);
+            }
+            _ => panic!("expected tunnel command"),
+        }
+    }
 
     #[test]
     fn test_cli_parsing_tunnel() {
