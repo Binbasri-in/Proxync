@@ -2,6 +2,16 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [fix/sidebar-toggle-and-window-constraints] - 2026-09-28 (Sidebar Toggle Relocation, Workspace Search Shortcut Badge & Window Dimension Constraints)
+- **Feature Summary**:
+  - **Sidebar Toggle Repositioning**: Moved sidebar toggle button from the global titlebar to directly beside "Proxync Engine" in the sidebar header for a cleaner and more intuitive navigation flow. In collapsed mode, rendered an expand (`menu_open`) button.
+  - **Workspace Search Enhancements**: Widened the global workspace search input (`w-48 sm:w-64 md:w-80 lg:w-96`), added a platform-aware keyboard shortcut badge (`⌘K` on macOS, `Ctrl+K` on Windows/Linux), and improved clear button padding and hover feedback.
+  - **Minimum Window Constraints**: Enforced minimum window constraints (`minWidth: 700`, `minHeight: 500`) in `tauri.conf.json`, added runtime `LogicalSize` enforcement via `appWindow.setMinSize` and `appWindow.setSize` in `App.tsx`, and applied `min-w-[700px] min-h-[500px]` to the root viewport container to prevent layout degradation during aggressive window shrinking.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/tauri.conf.json`
+  - `packages/desktop/src/App.tsx`
+  - `CHANGELOG.md`
+
 ## [fix/v0.2.4-version-bump] - 2026-09-27 (Workspace & Studio Version Bump to v0.2.4 for Next Release Cycle)
 - **Feature Summary**:
   - **Comprehensive Version Bump to v0.2.4**: Synchronized workspace and package manifests (`package.json`, `packages/desktop/package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`) to version `0.2.4`.
