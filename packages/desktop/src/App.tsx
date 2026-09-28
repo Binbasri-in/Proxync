@@ -2929,6 +2929,10 @@ export default function App() {
             void getCurrentWindow().startDragging();
           }
         }}
+        onDoubleClick={() => {
+          // Optional standard OS behavior: double-click titlebar to maximize/restore
+          void getCurrentWindow().toggleMaximize();
+        }}
       >
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
           <div className="app-brand flex items-center gap-2 shrink-0">
