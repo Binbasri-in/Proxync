@@ -167,8 +167,8 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
         provider: args.provider,
         detach: args.detach,
         qr: args.qr,
-        basic_auth: None,
-        expires: None,
+        basic_auth: args.basic_auth,
+        expires: args.expires,
         force: false,
         token: None,
         workspace: None,
@@ -178,7 +178,7 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
     }).await
 }
 
-fn percent_decode(input: &str) -> String {
+pub(crate) fn percent_decode(input: &str) -> String {
     let mut bytes = Vec::with_capacity(input.len());
     let mut chars = input.bytes();
     while let Some(b) = chars.next() {

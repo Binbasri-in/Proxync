@@ -236,6 +236,14 @@ pub struct ServeArgs {
     #[arg(long)]
     pub qr: bool,
 
+    /// Protect the public tunnel with HTTP Basic Auth (format: user:password)
+    #[arg(long, value_name = "USER:PASS", env = "PROXYNC_BASIC_AUTH")]
+    pub basic_auth: Option<String>,
+
+    /// Auto-close tunnel after duration (e.g. 30m, 1h, 2h)
+    #[arg(long, value_name = "DURATION")]
+    pub expires: Option<String>,
+
     /// Bypass directory and file size caps (for intentional large file hosting)
     #[arg(long)]
     pub allow_large: bool,

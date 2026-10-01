@@ -463,4 +463,47 @@ mod tests {
         let processed = preprocess_cli_args(raw);
         assert_eq!(processed, vec!["proxync", "serve", "./some_subfolder"]);
     }
+
+    #[test]
+    fn test_percent_decode_basic_and_spaces() {
+        use crate::commands::serve::percent_decode;
+        assert_eq!(percent_decode("hello%20world"), "hello world");
+        assert_eq!(percent_decode("hello+world"), "hello world");
+        assert_eq!(percent_decode("docs/api%2Fv1/report.pdf"), "docs/api/v1/report.pdf");
+    }
+
+    #[test]
+    fn test_percent_decode_multibyte_utf8() {
+        use crate::commands::serve::percent_decode;
+        // Emoji 🚀: %F0%9F%9A%80
+        assert_eq!(percent_decode("test_%F0%9F%9A%80_launch.png"), "test_🚀_launch.png");
+        // Japanese: 山田 (%E5%B1%B1%E7%94%B0)
+        assert_eq!(percent_decode("%E5%B1%B1%E7%94%B0/project"), "山田/project");
+    }
+
+    #[test]
+    fn test_percent_decode_malformed_and_partial() {
+        use crate::commands::serve::percent_decode;
+        // Trailing single percent
+        assert_eq!(percent_decode("100%"), "100%");
+        // Incomplete percent sequence
+        assert_eq!(percent_decode("discount%2"), "discount%2");
+        // Invalid hex characters
+        assert_eq!(percent_decode("error%ZZtest"), "error%ZZtest");
+    }
+
+    #[test]
+    fn test_cli_parsing_serve_with_basic_auth_and_expires() {
+        let args = ["proxync", "serve", "./public", "--basic-auth", "admin:secret", "--expires", "2h"];
+        let cli = Cli::try_parse_from(args).expect("parse cli");
+        match cli.command {
+            Some(Commands::Serve(s)) => {
+                assert_eq!(s.path, "./public");
+                assert_eq!(s.basic_auth.as_deref(), Some("admin:secret"));
+                assert_eq!(s.expires.as_deref(), Some("2h"));
+            }
+            _ => panic!("expected serve command"),
+        }
+    }
 }
+

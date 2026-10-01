@@ -2,6 +2,18 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Serve Tunnel Parity, Windows Path Quoting & URL Percent-Decode Test Suite)
+- **Feature Summary**:
+  - **Serve Command Tunnel Feature Parity (`packages/cli/src/args.rs`, `commands/serve.rs`)**: Added `--basic-auth` (with `PROXYNC_BASIC_AUTH` env support) and `--expires` flags to `ServeArgs`, forwarding them directly into `handle_tunnel`. Enables password-protecting hosted static folders and setting auto-expiration durations directly from `proxync serve`.
+  - **Windows Delayed File Cleanup Path Quoting (`packages/core/src/cli_installer.rs`)**: Hardened delayed binary cleanup by wrapping the file path argument in escaped double quotes (`format!("ping ... & del /f /q \"{}\"", old_path.display())`), preventing command syntax errors when user directories contain whitespace or ampersands.
+  - **URL Percent-Decode Test Suite & Export (`packages/cli/src/commands/serve.rs`, `main.rs`)**: Exported `percent_decode` as `pub(crate)` and added 4 targeted unit tests covering ASCII spaces (`%20`), plus signs (`+`), multi-byte UTF-8 emojis/kanji (`%F0%9F%9A%80`, `%E5%B1%B1%E7%94%B0`), malformed sequences (`100%`, `%ZZ`), and CLI argument parsing.
+- **Modified Files**:
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (CLI UTF-8 Safety, Auth Exposure Guard, Log Stream Tail & Desktop Bridge Consolidation)
 - **Feature Summary**:
   - **UTF-8 Character Boundary Truncation (`packages/cli/src/ui.rs`, `commands/scan.rs`, `commands/inspect.rs`)**: Replaced byte slicing (`&s[..len]`) with `truncate_str` and `truncate_path_tail` across table rendering, path summaries, and request body previews, eliminating panic crashes on multibyte characters, emojis, or international file paths.

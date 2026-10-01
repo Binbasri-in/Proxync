@@ -458,8 +458,9 @@ pub async fn download_and_replace_binary(destination: &Path, download_url: &str)
             // Try removing the old binary immediately
             if std::fs::remove_file(&old_path).is_err() {
                 use std::os::windows::process::CommandExt;
+                let del_cmd = format!("ping 127.0.0.1 -n 2 > nul & del /f /q \"{}\"", old_path.display());
                 let _ = std::process::Command::new("cmd")
-                    .args(&["/C", "ping 127.0.0.1 -n 2 > nul & del /f /q", &old_path.to_string_lossy()])
+                    .args(&["/C", &del_cmd])
                     .creation_flags(0x08000000)
                     .spawn();
             }
