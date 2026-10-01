@@ -10,20 +10,27 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub async fn handle_tunnel(args: TunnelArgs) -> Result<(), Box<dyn std::error::Error>> {
-    // Check if target service is a Vite dev server (Vite is not yet supported for public tunneling)
+    // Validate basic auth format if provided
+    if let Some(ref auth) = args.basic_auth {
+        if !auth.contains(':') {
+            eprintln!("\x1b[1;31m[!] Error: Invalid --basic-auth format '{}'. Expected 'username:password'.\x1b[0m", auth);
+            return Err("Invalid basic auth format. Format must be USER:PASS.".into());
+        }
+    }
+
     if !args.force {
+        // Guard against Vite dev servers: Vite HMR WebSocket and strict Host-header checks break over public tunnels
         if let Ok(procs) = proxync_core::recon::scan_processes(false).await {
             if let Some(proc) = procs.iter().find(|p| p.port == args.port) {
                 let fw = proc.framework.as_deref().unwrap_or(&proc.name).to_lowercase();
                 if fw.contains("vite") {
                     eprintln!("\x1b[1;31m[!] Error: Vite dev servers are not currently supported for public tunneling.\x1b[0m");
-                    eprintln!("    Support for Vite HMR and dynamic asset routing will be available in an upcoming release.");
+                    eprintln!("    Support for Vite HMR and dynamic asset routing is under development.");
                     eprintln!("    Tip: Use --force to bypass this restriction if you wish to proceed anyway.");
                     return Err("Vite dev servers are not currently supported.".into());
                 }
             }
         }
-
         // Pre-Flight Port Probe: Strict verification that a service is actually listening
         if let Ok(false) = proxync_core::recon::probe_port(args.port).await {
             eprintln!("\x1b[1;31m[!] Error: No local server detected listening on port {}.\x1b[0m", args.port);
@@ -57,6 +64,10 @@ pub async fn handle_tunnel(args: TunnelArgs) -> Result<(), Box<dyn std::error::E
     // is captured, measured in live stats, and streamed in real-time.
     let proxy_port = match proxync_core::proxy::start_proxy_with_auth(event_tx.clone(), args.port, args.basic_auth.clone()).await {
         Ok(p) => p,
+        Err(e) if args.basic_auth.is_some() => {
+            eprintln!("\x1b[1;31m[!] Error: Failed to start authenticated proxy: {}\x1b[0m", e);
+            return Err("Cannot expose tunnel: basic auth proxy failed to start.".into());
+        }
         Err(_) => args.port,
     };
 
@@ -447,7 +458,7 @@ pub async fn spawn_detached_tunnel(args: &TunnelArgs) -> Result<(), Box<dyn std:
     cmd.arg("--provider").arg(format!("{:?}", args.provider).to_lowercase());
 
     if let Some(ref auth) = args.basic_auth {
-        cmd.arg("--basic-auth").arg(auth);
+        cmd.env("PROXYNC_BASIC_AUTH", auth);
     }
     let effective_expires = args.expires.clone().unwrap_or_else(|| "1h".to_string());
     cmd.arg("--expires").arg(&effective_expires);
@@ -468,6 +479,9 @@ pub async fn spawn_detached_tunnel(args: &TunnelArgs) -> Result<(), Box<dyn std:
     }
 
     let daemon_log_path = proxync_core::storage::get_logs_dir().join("daemon.log");
+    if let Some(parent) = daemon_log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let daemon_log_file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -503,7 +517,7 @@ pub async fn spawn_detached_tunnel(args: &TunnelArgs) -> Result<(), Box<dyn std:
 
     // Poll registry until background worker has registered the live tunnel
     let mut registered_entry = None;
-    for _ in 0..32 {
+    for _ in 0..60 {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         if let Some(entry) = proxync_core::registry::find_tunnel_by_port(args.port) {
             if entry.pid == child_pid {

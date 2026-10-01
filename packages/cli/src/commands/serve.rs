@@ -24,7 +24,10 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
         PathBuf::from("C:\\Windows"),
         PathBuf::from("C:\\Program Files"),
         PathBuf::from("C:\\Program Files (x86)"),
-    ];
+    ]
+    .into_iter()
+    .filter_map(|p| std::fs::canonicalize(&p).ok().or(Some(p)))
+    .collect();
 
     if sensitive_roots.iter().any(|r| abs_dir == *r) {
         eprintln!("\x1b[1;31m[!] Security Error: Refusing to publicly serve critical system directory: {}\x1b[0m", abs_dir.display());
@@ -58,33 +61,23 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
         }
     }
 
-    let bind_port = if args.port == 0 {
-        // Ephemeral port selection
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-        let p = listener.local_addr()?.port();
-        drop(listener);
-        p
-    } else {
-        args.port
-    };
+    use tokio::net::TcpListener;
 
+    let addr = format!("127.0.0.1:{}", args.port);
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("\x1b[1;31m[!] Error: Failed to bind static server on {}: {}\x1b[0m", addr, e);
+            return Err(e.into());
+        }
+    };
+    let local_port = listener.local_addr()?.port();
     let serve_root = abs_dir.clone();
-    let local_port = bind_port;
 
     // Start background mini HTTP static file server
     let allow_large = args.allow_large;
     tokio::spawn(async move {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use tokio::net::TcpListener;
-
-        let addr = format!("127.0.0.1:{}", local_port);
-        let listener = match TcpListener::bind(&addr).await {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("Failed to bind static server on {}: {}", addr, e);
-                return;
-            }
-        };
 
         loop {
             let (mut socket, _) = match listener.accept().await {
@@ -107,15 +100,15 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
                 let raw_path = parts.next().unwrap_or("/");
 
                 if method != "GET" && method != "HEAD" {
-                    let res = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
+                    let res = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
                     let _ = socket.write_all(res.as_bytes()).await;
                     return;
                 }
 
                 // Decode URL path
                 let path_clean = raw_path.split('?').next().unwrap_or("/");
-                let relative = path_clean.trim_start_matches('/');
-                let mut target_file = root.join(relative);
+                let relative = percent_decode(path_clean.trim_start_matches('/'));
+                let mut target_file = root.join(&relative);
 
                 if target_file.is_dir() {
                     target_file = target_file.join("index.html");
@@ -125,14 +118,14 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
                 let canon_target = match target_file.canonicalize() {
                     Ok(p) => p,
                     Err(_) => {
-                        let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\n\r\n404 Not Found";
+                        let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n404 Not Found";
                         let _ = socket.write_all(res.as_bytes()).await;
                         return;
                     }
                 };
 
                 if !canon_target.starts_with(&root) {
-                    let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 13\r\n\r\n403 Forbidden";
+                    let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n403 Forbidden";
                     let _ = socket.write_all(res.as_bytes()).await;
                     return;
                 }
@@ -141,7 +134,7 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
                 const MAX_SINGLE_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50MB
                 if let Ok(meta) = canon_target.metadata() {
                     if meta.len() > MAX_SINGLE_FILE_SIZE && !allow_large {
-                        let res = "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 72\r\n\r\n413 Payload Too Large (File exceeds 50MB cap. Pass --allow-large to host).";
+                        let res = "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 72\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n413 Payload Too Large (File exceeds 50MB cap. Pass --allow-large to host).";
                         let _ = socket.write_all(res.as_bytes()).await;
                         return;
                     }
@@ -161,7 +154,7 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
                         }
                     }
                     Err(_) => {
-                        let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\n\r\n404 Not Found";
+                        let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n404 Not Found";
                         let _ = socket.write_all(res.as_bytes()).await;
                     }
                 }
@@ -183,4 +176,32 @@ pub async fn handle_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Err
         no_log: args.no_log,
         daemon_worker: false,
     }).await
+}
+
+fn percent_decode(input: &str) -> String {
+    let mut bytes = Vec::with_capacity(input.len());
+    let mut chars = input.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            let h1 = chars.next();
+            let h2 = chars.next();
+            if let (Some(h1), Some(h2)) = (h1, h2) {
+                if let Ok(val) = u8::from_str_radix(std::str::from_utf8(&[h1, h2]).unwrap_or(""), 16) {
+                    bytes.push(val);
+                    continue;
+                }
+                bytes.push(b'%');
+                bytes.push(h1);
+                bytes.push(h2);
+            } else {
+                bytes.push(b'%');
+                if let Some(c) = h1 { bytes.push(c); }
+            }
+        } else if b == b'+' {
+            bytes.push(b' ');
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8_lossy(&bytes).to_string()
 }

@@ -150,22 +150,30 @@ pub async fn handle_logs(args: LogsArgs) -> Result<(), Box<dyn std::error::Error
             if let Ok(meta) = std::fs::metadata(&cli_log_path) {
                 let current_size = meta.len();
                 if current_size > last_size {
-                    use std::io::{Seek, SeekFrom, Read};
+                    use std::io::{Read, Seek, SeekFrom};
                     if let Ok(mut file) = std::fs::File::open(&cli_log_path) {
-                        let _ = file.seek(SeekFrom::Start(last_size));
-                        let mut new_content = String::new();
-                        let _ = file.read_to_string(&mut new_content);
-                        for line in new_content.lines() {
-                            let matches = match args.grep {
-                                Some(ref pat) => line.to_lowercase().contains(&pat.to_lowercase()),
-                                None => true,
-                            };
-                            if matches {
-                                print_colored_log_line(line);
+                        if file.seek(SeekFrom::Start(last_size)).is_ok() {
+                            let to_read = (current_size - last_size) as usize;
+                            let mut buf = vec![0u8; to_read];
+                            if let Ok(n) = file.read(&mut buf) {
+                                if n > 0 {
+                                    if let Some(last_nl) = buf[..n].iter().rposition(|&b| b == b'\n') {
+                                        let valid_chunk = String::from_utf8_lossy(&buf[..last_nl]);
+                                        for line in valid_chunk.lines() {
+                                            let matches = match args.grep {
+                                                Some(ref pat) => line.to_lowercase().contains(&pat.to_lowercase()),
+                                                None => true,
+                                            };
+                                            if matches {
+                                                print_colored_log_line(line);
+                                            }
+                                        }
+                                        last_size += (last_nl + 1) as u64;
+                                    }
+                                }
                             }
                         }
                     }
-                    last_size = current_size;
                 } else if current_size < last_size {
                     last_size = 0;
                 }
@@ -287,10 +295,13 @@ pub async fn handle_replay(args: ReplayArgs) -> Result<(), Box<dyn std::error::E
 
             if !resp.body.is_empty() {
                 println!("\n\x1b[1mResponse Body:\x1b[0m");
-                let preview_len = resp.body.len().min(800);
-                println!("{}", &resp.body[..preview_len]);
-                if resp.body.len() > 800 {
-                    println!("\x1b[90m... ({} bytes truncated)\x1b[0m", resp.body.len() - 800);
+                let char_count = resp.body.chars().count();
+                if char_count > 800 {
+                    let preview: String = resp.body.chars().take(800).collect();
+                    println!("{}", preview);
+                    println!("\x1b[90m... ({} chars truncated)\x1b[0m", char_count - 800);
+                } else {
+                    println!("{}", resp.body);
                 }
             }
 

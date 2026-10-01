@@ -2,6 +2,32 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (CLI UTF-8 Safety, Auth Exposure Guard, Log Stream Tail & Desktop Bridge Consolidation)
+- **Feature Summary**:
+  - **UTF-8 Character Boundary Truncation (`packages/cli/src/ui.rs`, `commands/scan.rs`, `commands/inspect.rs`)**: Replaced byte slicing (`&s[..len]`) with `truncate_str` and `truncate_path_tail` across table rendering, path summaries, and request body previews, eliminating panic crashes on multibyte characters, emojis, or international file paths.
+  - **Tunnel Basic Auth Validation & Failure Hardening (`packages/cli/src/commands/tunnel.rs`)**: Added validation for the `--basic-auth user:pass` format and an exit failure if the authentication proxy fails to bind, preventing accidental unauthenticated public tunnel exposure.
+  - **Vite Tunnel Guard & Desktop Parity (`packages/cli/src/commands/tunnel.rs`, `main.rs`)**: Re-aligned CLI tunnel creation with desktop application behavior by detecting Vite dev servers, warning of Cloudflare edge host-header blocking / HMR disconnects, and requiring `--force` to tunnel Vite dev servers.
+  - **Reliable Log Stream Streaming (`packages/cli/src/commands/logs.rs`)**: Replaced partial string chunking with byte-buffered complete-line streaming up to the last newline (`\n`), eliminating JSON log dropouts and corrupted line fragments during rapid traffic bursts.
+  - **Static File Serving & Path Handling (`packages/cli/src/commands/serve.rs`, `args.rs`)**: Added `percent_decode` for static URL paths, added explicit `Connection: close` and CORS headers on error responses (403, 404, 405, 413), and routed path prefixes (`./`, `.\`, `/`, `\`) directly to `serve` mode with clean error diagnostics.
+  - **Cross-Platform Process Tree Termination (`packages/cli/src/commands/manage.rs`)**: Added Unix process tree termination (`pkill -TERM -P`) before parent PID termination to prevent orphaned child processes, matching Windows job-object process tree management.
+  - **Singleton Desktop Event Bridge (`packages/desktop/src-tauri/src/bridge.rs`, `lib.rs`, `tunnel.rs`, `proxy.rs`)**: Consolidated Tauri event forwarding into a dedicated singleton `bridge.rs` module, preventing duplicate event task loops between tunnel creation and proxy handlers.
+- **Modified Files**:
+  - `packages/cli/src/ui.rs`
+  - `packages/cli/src/commands/scan.rs`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/commands/logs.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/registry.rs`
+  - `packages/desktop/src-tauri/src/bridge.rs`
+  - `packages/desktop/src-tauri/src/lib.rs`
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/desktop/src-tauri/src/tunnel.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Installer GUI URL Resolution & Linux ARM64 Fallback)
 - **Feature Summary**:
   - **Installer Script Version Auto-Resolution (`scripts/install.ps1`, `scripts/install.sh`)**: Added automatic resolution of the latest release version tag via GitHub releases API and static `latest.json` fallback when `$Version`/`$VERSION` is omitted. Eliminates 404 download errors on GUI installers (`-Gui` / `--gui`) caused by empty version string interpolations.

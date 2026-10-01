@@ -4,6 +4,7 @@ use proxync_core::recon::scan_processes;
 use std::process::Command;
 
 pub async fn handle_ps() -> Result<(), Box<dyn std::error::Error>> {
+    // ponytail: sync fs read — acceptable, registry is tiny (<10 entries). Upgrade to tokio::fs if it grows.
     let tunnels = proxync_core::registry::read_registry();
 
     println!("\x1b[1;36mActive Tunnels:\x1b[0m");
@@ -92,8 +93,29 @@ pub async fn handle_stop(args: StopArgs) -> Result<(), Box<dyn std::error::Error
     let count = targets.len();
     for t in targets {
         kill_process_tree(t.pid);
-        let _ = proxync_core::registry::unregister_tunnel(&t.id);
-        println!("\x1b[1;32m✓ Stopped tunnel on port {}\x1b[0m (PID {}) — {}", t.port, t.pid, t.public_url);
+
+        // Wait for the process to exit (poll up to 3s with 100ms intervals) before unregistering
+        let mut exited = !proxync_core::registry::is_process_alive(t.pid);
+        if !exited {
+            for _ in 0..30 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                if !proxync_core::registry::is_process_alive(t.pid) {
+                    exited = true;
+                    break;
+                }
+            }
+        }
+
+        if let Err(e) = proxync_core::registry::unregister_tunnel(&t.id) {
+            eprintln!("\x1b[33mWarning: failed to update registry for tunnel {}: {}\x1b[0m", t.id, e);
+        }
+
+        if exited {
+            println!("\x1b[1;32m✓ Stopped tunnel on port {}\x1b[0m (PID {}) — {}", t.port, t.pid, t.public_url);
+        } else {
+            println!("\x1b[33m[!] Process {} did not terminate within 3s. Registry entry removed.\x1b[0m", t.pid);
+        }
+
         let msg = format!(
             "[{}] [INFO] [TUNNEL] Stopped tunnel on port {} (PID {}) via CLI",
             proxync_core::storage::get_current_iso_timestamp(),
@@ -125,6 +147,8 @@ pub fn kill_process_tree(pid: u32) {
 
     #[cfg(not(target_os = "windows"))]
     {
+        // First terminate child processes in tree to prevent zombies (RCA-004)
+        let _ = Command::new("pkill").args(["-TERM", "-P", &pid.to_string()]).output();
         let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).output();
     }
 }

@@ -1,3 +1,4 @@
+mod bridge;
 mod recon;
 mod proxy;
 mod storage;

@@ -173,24 +173,32 @@ pub async fn tail_traffic_stream(port: u16) -> Result<(), Box<dyn std::error::Er
             if current_size > last_size {
                 use std::io::{Read, Seek, SeekFrom};
                 if let Ok(mut file) = std::fs::File::open(&cli_log_path) {
-                    let _ = file.seek(SeekFrom::Start(last_size));
-                    let mut new_content = String::new();
-                    let _ = file.read_to_string(&mut new_content);
-                    for line in new_content.lines() {
-                        let matches_port = line.contains(&format!("(port {})", port_str)) 
-                            || contains_discrete_port(line, port)
-                            || (!line.contains("(port ") && (line.contains("[REQ]") || line.contains("[RES]")));
-                        if matches_port {
-                            print_colored_log_line(line);
-                        }
+                    if file.seek(SeekFrom::Start(last_size)).is_ok() {
+                        let to_read = (current_size - last_size) as usize;
+                        let mut buf = vec![0u8; to_read];
+                        if let Ok(n) = file.read(&mut buf) {
+                            if n > 0 {
+                                if let Some(last_nl) = buf[..n].iter().rposition(|&b| b == b'\n') {
+                                    let valid_chunk = String::from_utf8_lossy(&buf[..last_nl]);
+                                    for line in valid_chunk.lines() {
+                                        let matches_port = line.contains(&format!("(port {})", port_str)) 
+                                            || contains_discrete_port(line, port)
+                                            || (!line.contains("(port ") && (line.contains("[REQ]") || line.contains("[RES]")));
+                                        if matches_port {
+                                            print_colored_log_line(line);
+                                        }
 
-                        if is_tunnel_closure_log_line(line, port) {
-                            println!("\n\x1b[32m✓ Tunnel on port {} was closed. Detaching inspector.\x1b[0m", port);
-                            return Ok(());
+                                        if is_tunnel_closure_log_line(line, port) {
+                                            println!("\n\x1b[32m✓ Tunnel on port {} was closed. Detaching inspector.\x1b[0m", port);
+                                            return Ok(());
+                                        }
+                                    }
+                                    last_size += (last_nl + 1) as u64;
+                                }
+                            }
                         }
                     }
                 }
-                last_size = current_size;
             } else if current_size < last_size {
                 last_size = 0;
             }

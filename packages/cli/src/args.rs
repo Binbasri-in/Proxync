@@ -168,7 +168,7 @@ pub struct TunnelArgs {
     pub qr: bool,
 
     /// Protect the public tunnel with HTTP Basic Auth (format: user:password)
-    #[arg(long, value_name = "USER:PASS")]
+    #[arg(long, value_name = "USER:PASS", env = "PROXYNC_BASIC_AUTH")]
     pub basic_auth: Option<String>,
 
     /// Auto-close tunnel after duration (e.g. 30m, 1h, 2h)
@@ -283,8 +283,15 @@ pub fn preprocess_cli_args(raw_args: Vec<String>) -> Vec<String> {
         } else {
             let is_help_or_version = args.iter().skip(1).any(|a| a == "-h" || a == "--help" || a == "-V" || a == "--version");
             if !is_help_or_version {
-                // Check if any non-flag argument is an existing directory path (handles 'proxync ./dist', 'proxync -d ./dist')
-                let path_arg = args.iter().skip(1).find(|a| !a.starts_with('-') && std::path::Path::new(a.as_str()).exists());
+                // Check if any non-flag argument is an existing directory path or path-like (handles 'proxync ./dist', 'proxync -d ./dist', 'proxync ./missing')
+                let path_arg = args.iter().skip(1).find(|a| {
+                    !a.starts_with('-')
+                        && (std::path::Path::new(a.as_str()).exists()
+                            || a.starts_with("./")
+                            || a.starts_with(".\\")
+                            || a.contains('/')
+                            || a.contains('\\'))
+                });
                 if path_arg.is_some() {
                     args.insert(1, "serve".to_string());
                 }

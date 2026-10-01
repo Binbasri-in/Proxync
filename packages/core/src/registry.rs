@@ -33,6 +33,8 @@ pub fn is_process_alive(pid: u32) -> bool {
         return true;
     }
 
+    // ponytail: tasklist subprocess check on Windows — acceptable for single-user CLI with <10 tunnels.
+    // Upgrade: query process status via OpenProcess/windows-sys if latency is measured >300ms.
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -60,11 +62,17 @@ pub fn read_registry() -> Vec<TunnelEntry> {
     }
     let content = match fs::read_to_string(&path) {
         Ok(c) => c,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            eprintln!("Warning: failed to read tunnel registry {:?}: {}", path, e);
+            return Vec::new();
+        }
     };
     let entries: Vec<TunnelEntry> = match serde_json::from_str(&content) {
         Ok(e) => e,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            eprintln!("Warning: corrupt tunnel registry at {:?}: {}", path, e);
+            return Vec::new();
+        }
     };
 
     // Partition entries by process liveness. Stale entries are pruned automatically.
@@ -86,18 +94,17 @@ fn write_registry_atomic(entries: &[TunnelEntry]) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        // ponytail: TOCTOU window between remove_file and rename on Windows — acceptable for single-user CLI.
         if path.exists() {
             let _ = fs::remove_file(&path);
         }
     }
 
-    if let Err(e) = fs::rename(&temp_path, &path) {
-        // Fallback: direct write if rename fails across partitions or locks
-        let _ = fs::write(&path, json);
+    fs::rename(&temp_path, &path).map_err(|e| {
+        // Clean up temp file so it doesn't accumulate on rename failure
         let _ = fs::remove_file(&temp_path);
-        return Err(e.to_string());
-    }
-    Ok(())
+        e.to_string()
+    })
 }
 
 /// Add a tunnel entry on start (overwrites any stale entry on same id or dead port)

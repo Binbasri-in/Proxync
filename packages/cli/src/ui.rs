@@ -278,8 +278,22 @@ pub fn guess_mime_type(path: &Path) -> &'static str {
 }
 
 pub fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() > max {
-        format!("{}...", &s[..max.saturating_sub(3)])
+    let char_count = s.chars().count();
+    if char_count > max {
+        let keep = max.saturating_sub(3);
+        let truncated: String = s.chars().take(keep).collect();
+        format!("{}...", truncated)
+    } else {
+        s.to_string()
+    }
+}
+
+pub fn truncate_path_tail(s: &str, max: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count > max {
+        let skip = char_count.saturating_sub(max.saturating_sub(3));
+        let tail: String = s.chars().skip(skip).collect();
+        format!("...{}", tail)
     } else {
         s.to_string()
     }
@@ -329,7 +343,7 @@ impl Drop for RawModeGuard {
 pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) -> Result<u16, Box<dyn std::error::Error>> {
     use crossterm::{
         cursor,
-        event::{self, Event, KeyCode, KeyEventKind},
+        event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
         execute,
         style::{Color, Print, ResetColor, SetForegroundColor},
         terminal::{self, Clear, ClearType},
@@ -353,7 +367,7 @@ pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) 
             let fw = p.framework.as_deref().unwrap_or(&p.name);
             let is_vite = fw.to_lowercase().contains("vite");
             let fw_display = if is_vite {
-                format!("{} \x1b[33m(unsupported)\x1b[0m", fw)
+                format!("{} \x1b[33m(under dev)\x1b[0m", fw)
             } else {
                 fw.to_string()
             };
@@ -365,7 +379,7 @@ pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) 
                 execute!(stdout, Print(format!("    [{}] {:<6} {:<28} {}\r\n", i + 1, p.port, fw_display, dir)))?;
             }
         }
-        execute!(stdout, Clear(ClearType::CurrentLine), Print("  Use ↑/↓ arrows to select, Enter to confirm, Esc to cancel"))?;
+        execute!(stdout, Clear(ClearType::CurrentLine), Print("  Use ↑/↓ arrows to select, Enter to confirm, Esc/Ctrl+C to cancel"))?;
         stdout.flush()?;
         Ok(())
     };
@@ -405,6 +419,16 @@ pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) 
                             cursor::Show
                         )?;
                         return Err("Selection cancelled by user.".into());
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        execute!(
+                            stdout,
+                            cursor::MoveUp(up_lines),
+                            cursor::MoveToColumn(0),
+                            Clear(ClearType::FromCursorDown),
+                            cursor::Show
+                        )?;
+                        return Err("Selection cancelled by user (Ctrl+C).".into());
                     }
                     _ => {}
                 }

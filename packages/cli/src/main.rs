@@ -60,6 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if procs.len() == 1 {
                 let p = &procs[0];
+                let is_vite = p.framework.as_deref().unwrap_or(&p.name).to_lowercase().contains("vite");
+                if is_vite {
+                    let fw = p.framework.as_deref().unwrap_or(&p.name);
+                    println!("\x1b[33m[!] Discovered {} on port {}.\x1b[0m", fw, p.port);
+                    println!("    Sharing Vite dev servers over public tunnels is currently under development (HMR / host header constraints).");
+                    println!("    To expose it anyway, run: \x1b[1mproxync tunnel {} --force\x1b[0m\n", p.port);
+                    return Ok(());
+                }
                 println!("✓ Discovered {} on port {} — exposing to public tunnel...", 
                     p.framework.as_deref().unwrap_or(&p.name), p.port);
                 handle_tunnel(TunnelArgs { 
@@ -230,6 +238,21 @@ mod tests {
                 assert_eq!(t.basic_auth.as_deref(), Some("admin:secret123"));
                 assert_eq!(t.expires.as_deref(), Some("30m"));
                 assert!(t.force);
+            }
+            _ => panic!("expected tunnel command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_tunnel_basic_auth_from_env() {
+        std::env::set_var("PROXYNC_BASIC_AUTH", "envuser:envpass");
+        let args = ["proxync", "tunnel", "3000"];
+        let cli = Cli::try_parse_from(args).expect("parse cli");
+        std::env::remove_var("PROXYNC_BASIC_AUTH");
+        match cli.command {
+            Some(Commands::Tunnel(t)) => {
+                assert_eq!(t.port, 3000);
+                assert_eq!(t.basic_auth.as_deref(), Some("envuser:envpass"));
             }
             _ => panic!("expected tunnel command"),
         }
@@ -412,5 +435,32 @@ mod tests {
         let raw = vec!["proxync".into(), "4000".into(), "--help".into()];
         let processed = preprocess_cli_args(raw);
         assert_eq!(processed, vec!["proxync", "tunnel", "4000", "--help"]);
+    }
+
+    #[test]
+    fn test_truncate_str_utf8_multibyte() {
+        // Multi-byte UTF-8 emoji and non-ASCII characters
+        let s = "Hello 🚀 World";
+        let res = truncate_str(s, 10);
+        assert_eq!(res, "Hello 🚀...");
+
+        let accented = "Café au lait";
+        let res_accent = truncate_str(accented, 8);
+        assert_eq!(res_accent, "Café ...");
+    }
+
+    #[test]
+    fn test_truncate_path_tail_utf8() {
+        let path = "C:\\Users\\山田太郎\\Projects\\MySuperLongDirectoryName";
+        let res = truncate_path_tail(path, 25);
+        assert!(res.starts_with("..."));
+        assert_eq!(res.chars().count(), 25);
+    }
+
+    #[test]
+    fn test_preprocess_cli_args_path_prefix_routes_to_serve() {
+        let raw = vec!["proxync".into(), "./some_subfolder".into()];
+        let processed = preprocess_cli_args(raw);
+        assert_eq!(processed, vec!["proxync", "serve", "./some_subfolder"]);
     }
 }

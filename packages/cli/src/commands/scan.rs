@@ -1,5 +1,5 @@
 use crate::args::ScanArgs;
-use crate::ui::truncate_str;
+use crate::ui::{truncate_path_tail, truncate_str};
 use proxync_core::recon::scan_processes;
 
 pub async fn handle_scan(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -23,11 +23,7 @@ pub async fn handle_scan(args: ScanArgs) -> Result<(), Box<dyn std::error::Error
         let fw = p.framework.clone().unwrap_or_else(|| "-".to_string());
         let pid_str = p.pid.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
         let dir = p.directory.as_deref().unwrap_or("-");
-        let display_dir = if dir.len() > 30 {
-            format!("...{}", &dir[dir.len() - 27..])
-        } else {
-            dir.to_string()
-        };
+        let display_dir = truncate_path_tail(dir, 30);
 
         let fw_color = match fw.as_str() {
             "Next.js" | "React" | "Vite" => "\x1b[32m", // Green
