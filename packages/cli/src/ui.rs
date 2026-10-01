@@ -1,0 +1,399 @@
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Default, Clone)]
+pub struct SessionStats {
+    pub total_requests: u64,
+    pub success_2xx: u64,
+    pub redirect_3xx: u64,
+    pub client_err_4xx: u64,
+    pub server_err_5xx: u64,
+    pub total_duration_ms: u64,
+}
+
+pub fn print_stats(stats: &Arc<Mutex<SessionStats>>, started_at: std::time::Instant) {
+    let s = {
+        if let Ok(guard) = stats.try_lock() {
+            guard.clone()
+        } else {
+            return;
+        }
+    };
+    let uptime = started_at.elapsed();
+    let uptime_str = format!("{}m {}s", uptime.as_secs() / 60, uptime.as_secs() % 60);
+    let avg_latency = if s.total_requests > 0 {
+        s.total_duration_ms / s.total_requests
+    } else {
+        0
+    };
+
+    println!("\n\x1b[1;36m┌── Live Tunnel Metrics ──────────────────────────┐\x1b[0m");
+    println!("\x1b[1;36m│\x1b[0m Uptime          : \x1b[1m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", uptime_str);
+    println!("\x1b[1;36m│\x1b[0m Total Requests  : \x1b[1m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", s.total_requests);
+    println!("\x1b[1;36m│\x1b[0m Average Latency : \x1b[1m{}ms{:<28}\x1b[0m\x1b[1;36m│\x1b[0m", avg_latency, "");
+    println!("\x1b[1;36m│\x1b[0m Success (2xx)   : \x1b[32m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", s.success_2xx);
+    println!("\x1b[1;36m│\x1b[0m Redirect (3xx)  : \x1b[34m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", s.redirect_3xx);
+    println!("\x1b[1;36m│\x1b[0m Client Err (4xx): \x1b[33m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", s.client_err_4xx);
+    println!("\x1b[1;36m│\x1b[0m Server Err (5xx): \x1b[31m{:<30}\x1b[0m\x1b[1;36m│\x1b[0m", s.server_err_5xx);
+    println!("\x1b[1;36m└─────────────────────────────────────────────────┘\x1b[0m\n");
+}
+
+pub fn print_hotkey_bar(show_traffic: bool) {
+    let traffic_badge = if show_traffic {
+        "\x1b[1;32mON\x1b[0m"
+    } else {
+        "\x1b[1;33mPAUSED\x1b[0m"
+    };
+    println!(
+        "\x1b[90m[Hotkeys] o: Open Browser | c: Copy URL | q: QR Code | s: Live Stats | t: Traffic ({}) | l: Clear | Esc/Ctrl+C: Quit\x1b[0m\n",
+        traffic_badge
+    );
+}
+
+pub fn print_proxy_hotkey_bar(show_traffic: bool) {
+    let traffic_badge = if show_traffic {
+        "\x1b[1;32mON\x1b[0m"
+    } else {
+        "\x1b[1;33mPAUSED\x1b[0m"
+    };
+    println!(
+        "\x1b[90m[Hotkeys] t: Traffic ({}) | l: Clear Screen | Esc / Ctrl+C: Quit\x1b[0m\n",
+        traffic_badge
+    );
+}
+
+pub fn print_colored_log_line(line: &str) {
+    if line.contains("[REQ]") {
+        println!("\x1b[1;33m{}\x1b[0m", line);
+    } else if line.contains("[RES]") {
+        if line.contains("status=2") || line.contains("status=3") {
+            println!("\x1b[32m{}\x1b[0m", line);
+        } else {
+            println!("\x1b[31m{}\x1b[0m", line);
+        }
+    } else if line.contains("[WARN]") {
+        println!("\x1b[33m{}\x1b[0m", line);
+    } else if line.contains("[INFO]") {
+        println!("\x1b[36m{}\x1b[0m", line);
+    } else {
+        println!("{}", line);
+    }
+}
+
+pub fn format_qr_code(url: &str) -> Option<String> {
+    let code = qrcode::QrCode::new(url.as_bytes()).ok()?;
+    let rendered = code
+        .render::<qrcode::render::unicode::Dense1x2>()
+        .quiet_zone(true)
+        .build();
+    Some(rendered)
+}
+
+pub fn copy_to_clipboard(text: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::io::Write;
+        let mut cmd = std::process::Command::new("clip");
+        std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x08000000);
+        if let Ok(mut child) = cmd.stdin(std::process::Stdio::piped()).spawn() {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            return child.wait().map(|s| s.success()).unwrap_or(false);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::io::Write;
+        if let Ok(mut child) = std::process::Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            return child.wait().map(|s| s.success()).unwrap_or(false);
+        }
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        use std::io::Write;
+        for tool in &["wl-copy", "xclip"] {
+            let mut cmd = std::process::Command::new(tool);
+            if *tool == "xclip" {
+                cmd.arg("-selection").arg("clipboard");
+            }
+            cmd.stdin(std::process::Stdio::piped());
+            if let Ok(mut child) = cmd.spawn() {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                if child.wait().map(|s| s.success()).unwrap_or(false) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn open_in_browser(url: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("cmd").args(["/c", "start", "", url]).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = Command::new("open").arg(url).spawn();
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        let _ = Command::new("xdg-open").arg(url).spawn();
+    }
+}
+
+pub fn elapsed_since(started_epoch_secs: u64) -> String {
+    let now_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    let diff = now_secs.saturating_sub(started_epoch_secs);
+    format_duration_human(diff)
+}
+
+pub fn format_duration_human(secs: u64) -> String {
+    if secs < 60 {
+        format!("{}s", secs)
+    } else if secs < 3600 {
+        let m = secs / 60;
+        let s = secs % 60;
+        if s == 0 {
+            format!("{}m", m)
+        } else {
+            format!("{}m {}s", m, s)
+        }
+    } else {
+        let h = secs / 3600;
+        let m = (secs % 3600) / 60;
+        if m == 0 {
+            format!("{}h", h)
+        } else {
+            format!("{}h {}m", h, m)
+        }
+    }
+}
+
+pub fn parse_duration_to_secs(input: &str) -> Option<u64> {
+    let s = input.trim().to_lowercase();
+    if s.ends_with('h') {
+        let val: u64 = s[..s.len() - 1].trim().parse().ok()?;
+        Some(val * 3600)
+    } else if s.ends_with('m') {
+        let val: u64 = s[..s.len() - 1].trim().parse().ok()?;
+        Some(val * 60)
+    } else if s.ends_with('s') {
+        let val: u64 = s[..s.len() - 1].trim().parse().ok()?;
+        Some(val)
+    } else {
+        s.parse::<u64>().ok()
+    }
+}
+
+pub const DEFAULT_STANDBY_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+
+pub fn get_standby_idle_timeout() -> std::time::Duration {
+    if let Ok(val) = std::env::var("PROXYNC_STANDBY_IDLE_TIMEOUT_SECS") {
+        if let Ok(secs) = val.parse::<u64>() {
+            return std::time::Duration::from_secs(secs);
+        }
+    }
+    DEFAULT_STANDBY_IDLE_TIMEOUT
+}
+
+pub fn is_tunnel_closure_log_line(line: &str, port: u16) -> bool {
+    let lower = line.to_lowercase();
+    let is_closure = lower.contains("closed tunnel")
+        || lower.contains("stopped tunnel")
+        || lower.contains("tunnel terminated")
+        || lower.contains("auto-closed")
+        || lower.contains("automatically closed")
+        || lower.contains("auto-expired");
+    is_closure && contains_discrete_port(line, port)
+}
+
+pub fn contains_discrete_port(line: &str, port: u16) -> bool {
+    let port_str = port.to_string();
+    for pattern in &[
+        format!("port {}", port_str),
+        format!(":{}", port_str),
+        format!("({})", port_str),
+    ] {
+        if let Some(pos) = line.find(pattern) {
+            let end = pos + pattern.len();
+            // Ensure the next char is not a digit (prevents 80 matching 8080 or 40 matching 4000)
+            let is_end_of_token = line.as_bytes().get(end).map(|b| !b.is_ascii_digit()).unwrap_or(true);
+            if is_end_of_token {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub fn guess_mime_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|ext| ext.to_str()).unwrap_or("") {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "application/javascript; charset=utf-8",
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "webp" => "image/webp",
+        "wasm" => "application/wasm",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain; charset=utf-8",
+        "xml" => "application/xml",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        _ => "application/octet-stream",
+    }
+}
+
+pub fn truncate_str(s: &str, max: usize) -> String {
+    if s.len() > max {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    } else {
+        s.to_string()
+    }
+}
+
+pub fn get_home_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var("USERPROFILE").ok()
+            .or_else(|| {
+                let drive = std::env::var("HOMEDRIVE").ok()?;
+                let path  = std::env::var("HOMEPATH").ok()?;
+                Some(format!("{}{}", drive, path))
+            })
+            .map(PathBuf::from)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var("HOME").ok().map(PathBuf::from)
+    }
+}
+
+pub fn calculate_dir_size(path: &Path, depth: usize, max_depth: usize) -> u64 {
+    if depth >= max_depth { return 0; }
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                total += p.metadata().map(|m| m.len()).unwrap_or(0);
+            } else if p.is_dir() {
+                total += calculate_dir_size(&p, depth + 1, max_depth);
+            }
+        }
+    }
+    total
+}
+
+pub struct RawModeGuard;
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
+pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) -> Result<u16, Box<dyn std::error::Error>> {
+    use crossterm::{
+        cursor,
+        event::{self, Event, KeyCode, KeyEventKind},
+        execute,
+        style::{Color, Print, ResetColor, SetForegroundColor},
+        terminal::{self, Clear, ClearType},
+    };
+    use std::io::{stdout, Write};
+
+    let mut stdout = stdout();
+    terminal::enable_raw_mode()?;
+    let _raw_guard = RawModeGuard;
+    let _ = execute!(stdout, cursor::Hide);
+    let mut selected_idx = 0;
+    let up_lines = (procs.len() + 1) as u16;
+
+    let render = |stdout: &mut std::io::Stdout, sel: usize, is_first: bool| -> Result<(), Box<dyn std::error::Error>> {
+        if !is_first {
+            execute!(stdout, cursor::MoveUp(up_lines), cursor::MoveToColumn(0))?;
+        }
+        execute!(stdout, cursor::MoveToColumn(0), Clear(ClearType::CurrentLine))?;
+        execute!(stdout, Print("\r\x1b[1;36mMultiple dev servers detected. Select port to tunnel:\x1b[0m\r\n"))?;
+        for (i, p) in procs.iter().enumerate() {
+            let fw = p.framework.as_deref().unwrap_or(&p.name);
+            let is_vite = fw.to_lowercase().contains("vite");
+            let fw_display = if is_vite {
+                format!("{} \x1b[33m(unsupported)\x1b[0m", fw)
+            } else {
+                fw.to_string()
+            };
+            let dir = p.directory.as_deref().unwrap_or("");
+            execute!(stdout, Clear(ClearType::CurrentLine))?;
+            if i == sel {
+                execute!(stdout, SetForegroundColor(Color::Cyan), Print(format!("  ➜ [{}] {:<6} {:<28} {}\r\n", i + 1, p.port, fw_display, dir)), ResetColor)?;
+            } else {
+                execute!(stdout, Print(format!("    [{}] {:<6} {:<28} {}\r\n", i + 1, p.port, fw_display, dir)))?;
+            }
+        }
+        execute!(stdout, Clear(ClearType::CurrentLine), Print("  Use ↑/↓ arrows to select, Enter to confirm, Esc to cancel"))?;
+        stdout.flush()?;
+        Ok(())
+    };
+
+    render(&mut stdout, selected_idx, true)?;
+
+    loop {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Up => {
+                        selected_idx = selected_idx.saturating_sub(1);
+                        render(&mut stdout, selected_idx, false)?;
+                    }
+                    KeyCode::Down => {
+                        if selected_idx + 1 < procs.len() {
+                            selected_idx += 1;
+                        }
+                        render(&mut stdout, selected_idx, false)?;
+                    }
+                    KeyCode::Enter => {
+                        execute!(
+                            stdout,
+                            cursor::MoveUp(up_lines),
+                            cursor::MoveToColumn(0),
+                            Clear(ClearType::FromCursorDown),
+                            cursor::Show
+                        )?;
+                        return Ok(procs[selected_idx].port);
+                    }
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        execute!(
+                            stdout,
+                            cursor::MoveUp(up_lines),
+                            cursor::MoveToColumn(0),
+                            Clear(ClearType::FromCursorDown),
+                            cursor::Show
+                        )?;
+                        return Err("Selection cancelled by user.".into());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}

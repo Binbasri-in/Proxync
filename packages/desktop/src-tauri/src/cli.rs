@@ -11,8 +11,8 @@ pub fn check_cli_status() -> Result<CliStatus, String> {
 }
 
 #[tauri::command]
-pub fn install_cli_to_path() -> Result<String, String> {
-    core_install()
+pub async fn install_cli_to_path() -> Result<String, String> {
+    core_install().await
 }
 
 #[tauri::command]

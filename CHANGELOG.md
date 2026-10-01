@@ -2,6 +2,27 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (CLI Modularization, Parity Alignment & Tunnel Registry)
+- **Feature Summary**:
+  - **CLI Modularization & Architecture Splitting**: Refactored monolithic 2,800+ line `main.rs` into dedicated modules under `packages/cli/src/`: `args.rs` (clap CLI grammar), `ui.rs` (terminal formatting, banners, half-block QR code), and `commands/` (`scan`, `tunnel`, `inspect`, `serve`, `manage`, `logs`, `system`).
+  - **Desktop Subdomain Parity & Cleanup**: Removed non-standard `--subdomain` flag from CLI commands to enforce 1:1 parity with the Desktop application, ensuring all Native SSH tunnels assign secure collision-free subdomains (`px-*`).
+  - **CLI Command Hotkey & Shorthand Robustness**: Resolved argument parsing edge cases where flags passed after a numeric port shorthand (e.g. `proxync 4000 --help`) failed to resolve correctly.
+  - **Tunnel Registry & Background Lifecycle**: Implemented `packages/core/src/registry.rs` for tracking active foreground/background tunnels, process identification, and persistent status monitoring across `proxync ps`, `proxync status`, and `proxync stop`.
+- **Modified Files**:
+  - `packages/cli/src/main.rs`
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/ui.rs`
+  - `packages/cli/src/commands/mod.rs`
+  - `packages/cli/src/commands/scan.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/commands/logs.rs`
+  - `packages/cli/src/commands/system.rs`
+  - `packages/core/src/registry.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-09-27 (Cross-Platform Windows Installation & Git Bash Installer Support)
 - **Feature Summary**:
   - **Git Bash & MSYS2 Installer (`scripts/install.sh`)**: Added platform detection for `mingw*`, `msys*`, and `cygwin*` to download `proxync-windows-x86_64.exe` directly on Windows, installing into `%LOCALAPPDATA%\Programs\Proxync\bin\` and invoking `setup-path` to register in the Windows User `PATH`.

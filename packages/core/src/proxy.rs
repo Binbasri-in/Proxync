@@ -7,6 +7,7 @@ use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::events::{EventSender, ProxyncEvent};
+use base64::prelude::*;
 
 lazy_static! {
     static ref PROXY_HANDLES: Arc<Mutex<HashMap<u16, (u16, Vec<tokio::task::JoinHandle<()>>)>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -39,12 +40,24 @@ pub async fn stop_proxy(local_port: Option<u16>) -> bool {
 const MAX_UPLOAD_BODY_BYTES: usize = 50 * 1024 * 1024; // 50 MB
 
 pub async fn start_proxy(tx: EventSender, local_port: u16) -> Result<u16, String> {
+    start_proxy_with_auth(tx, local_port, None).await
+}
+
+pub async fn start_proxy_with_auth(
+    tx: EventSender,
+    local_port: u16,
+    basic_auth: Option<String>,
+) -> Result<u16, String> {
     let mut map = PROXY_HANDLES.lock().await;
     if let Some((_, old_handles)) = map.remove(&local_port) {
         for handle in old_handles {
             handle.abort();
         }
     }
+
+    let auth_header_expected: Option<Arc<String>> = basic_auth.map(|cred| {
+        Arc::new(format!("Basic {}", BASE64_STANDARD.encode(cred.trim())))
+    });
 
     let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
     let proxy_port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -53,6 +66,7 @@ pub async fn start_proxy(tx: EventSender, local_port: u16) -> Result<u16, String
     let listener_handle = tokio::spawn(async move {
         while let Ok((mut client_stream, _)) = listener.accept().await {
             let tx_clone = proxy_tx.clone();
+            let auth_clone = auth_header_expected.clone();
             tokio::spawn(async move {
                 // Connect to target service on 127.0.0.1 with fallback to [::1] (for IPv6-only servers like Vite)
                 let target_stream_res = match TcpStream::connect(format!("127.0.0.1:{}", local_port)).await {
@@ -96,6 +110,28 @@ pub async fn start_proxy(tx: EventSender, local_port: u16) -> Result<u16, String
                 };
 
                 let req_str = String::from_utf8_lossy(&req_buf[..n_req]);
+
+                // Basic Auth verification if configured
+                if let Some(ref expected_auth) = auth_clone {
+                    let mut has_valid_auth = false;
+                    for l in req_str.lines() {
+                        let l_lower = l.to_lowercase();
+                        if l_lower.starts_with("authorization:") {
+                            if let Some((_, val)) = l.split_once(':') {
+                                if val.trim() == expected_auth.as_str() {
+                                    has_valid_auth = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !has_valid_auth {
+                        let resp = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Proxync Tunnel\"\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 12\r\nConnection: close\r\n\r\nUnauthorized";
+                        let _ = client_stream.write_all(resp.as_bytes()).await;
+                        let _ = client_stream.shutdown().await;
+                        return;
+                    }
+                }
 
                 // 1. Detect WebSocket Upgrade requests (Vite HMR, Next Turbopack, Socket.io, NestJS, etc.)
                 let is_ws_upgrade = req_str.lines().any(|l| {

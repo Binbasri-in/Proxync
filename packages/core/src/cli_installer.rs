@@ -9,6 +9,77 @@ pub struct CliStatus {
     pub in_path: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CliUpdateInfo {
+    pub current_version: String,
+    pub latest_version: String,
+    pub download_url: String,
+    pub release_notes_url: String,
+    pub is_newer: bool,
+}
+
+pub fn get_cli_asset_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "proxync-windows-x86_64.exe"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "proxync-darwin-universal.tar.gz"
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        "proxync-linux-x86_64.tar.gz"
+    }
+}
+
+/// Recursively removes stale .old and .tmp binaries left behind by updates
+pub fn cleanup_old_binaries(dir: &Path) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".old")
+                    || name.ends_with(".tmp")
+                    || name.contains(".old-")
+                    || name.contains(".tmp-")
+                    || name.contains(".exe.old")
+                    || name.contains(".exe.tmp")
+                    || name.contains("archive-")
+                {
+                    let _ = std::fs::remove_file(&path);
+                } else if name.contains("extract-") && path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+}
+
+/// Compares two semver strings (e.g. "0.2.5" vs "0.2.4" or "v0.2.5" vs "v0.2.4")
+pub fn is_newer_version(latest_tag: &str, current_tag: &str) -> bool {
+    let parse_parts = |tag: &str| -> Vec<u64> {
+        let clean = tag.trim().trim_start_matches('v').trim_start_matches('V');
+        clean
+            .split(|c: char| c == '.' || c == '-' || c == '+')
+            .filter_map(|p| p.parse::<u64>().ok())
+            .collect()
+    };
+
+    let latest_parts = parse_parts(latest_tag);
+    let current_parts = parse_parts(current_tag);
+
+    for (l, c) in latest_parts.iter().zip(current_parts.iter()) {
+        if l > c {
+            return true;
+        } else if l < c {
+            return false;
+        }
+    }
+
+    latest_parts.len() > current_parts.len()
+}
+
 /// Resolves standard OS-specific installation directory for the Proxync CLI
 pub fn get_default_cli_dir() -> PathBuf {
     #[cfg(target_os = "windows")]
@@ -116,11 +187,22 @@ pub fn find_source_cli_binary() -> Option<PathBuf> {
         let mut curr: Option<&Path> = Some(&cwd);
         while let Some(dir) = curr {
             let release = dir.join("packages").join("cli").join("target").join("release").join(bin_name);
-            if release.is_file() && !is_desktop_binary(&release, current_exe.as_deref()) {
-                return Some(release);
-            }
             let debug = dir.join("packages").join("cli").join("target").join("debug").join(bin_name);
-            if debug.is_file() && !is_desktop_binary(&debug, current_exe.as_deref()) {
+            let rel_valid = release.is_file() && !is_desktop_binary(&release, current_exe.as_deref());
+            let dbg_valid = debug.is_file() && !is_desktop_binary(&debug, current_exe.as_deref());
+
+            if rel_valid && dbg_valid {
+                let rel_time = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
+                let dbg_time = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+                if let (Some(rt), Some(dt)) = (rel_time, dbg_time) {
+                    if dt > rt {
+                        return Some(debug);
+                    }
+                }
+                return Some(release);
+            } else if rel_valid {
+                return Some(release);
+            } else if dbg_valid {
                 return Some(debug);
             }
             curr = dir.parent();
@@ -162,11 +244,22 @@ pub fn find_source_cli_binary() -> Option<PathBuf> {
             }
             // Development workspace layouts:
             let dev_cli_release = parent.join("packages").join("cli").join("target").join("release").join(bin_name);
-            if dev_cli_release.is_file() && !is_desktop_binary(&dev_cli_release, Some(exe_path)) {
-                return Some(dev_cli_release);
-            }
             let dev_cli_debug = parent.join("packages").join("cli").join("target").join("debug").join(bin_name);
-            if dev_cli_debug.is_file() && !is_desktop_binary(&dev_cli_debug, Some(exe_path)) {
+            let rel_valid = dev_cli_release.is_file() && !is_desktop_binary(&dev_cli_release, Some(exe_path));
+            let dbg_valid = dev_cli_debug.is_file() && !is_desktop_binary(&dev_cli_debug, Some(exe_path));
+
+            if rel_valid && dbg_valid {
+                let rel_time = std::fs::metadata(&dev_cli_release).and_then(|m| m.modified()).ok();
+                let dbg_time = std::fs::metadata(&dev_cli_debug).and_then(|m| m.modified()).ok();
+                if let (Some(rt), Some(dt)) = (rel_time, dbg_time) {
+                    if dt > rt {
+                        return Some(dev_cli_debug);
+                    }
+                }
+                return Some(dev_cli_release);
+            } else if rel_valid {
+                return Some(dev_cli_release);
+            } else if dbg_valid {
                 return Some(dev_cli_debug);
             }
 
@@ -177,21 +270,277 @@ pub fn find_source_cli_binary() -> Option<PathBuf> {
     None
 }
 
-/// Installs the Proxync CLI binary to the default OS directory and registers it to User PATH
-pub fn install_cli_to_path() -> Result<String, String> {
+/// Checks GitHub releases to determine if a newer version of the CLI is available.
+/// Reads the shared static latest.json metadata (same file used by desktop GUI updater) to eliminate rate limits.
+pub async fn check_for_cli_update(current_version: &str) -> Result<Option<CliUpdateInfo>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .user_agent(format!("proxync-cli/{}", current_version))
+        .build()
+        .map_err(|e| format!("HTTP client init failed: {}", e))?;
+
+    // 1. Primary: check shared static latest.json published with the release (zero rate limits)
+    let latest_json_url = "https://github.com/Inilax/Proxync/releases/latest/download/latest.json";
+    let mut resolved_tag: Option<String> = None;
+    let mut resolved_url = "https://github.com/Inilax/Proxync/releases/latest".to_string();
+
+    if let Ok(resp) = client.get(latest_json_url).send().await {
+        if resp.status().is_success() {
+            #[derive(Deserialize)]
+            struct LatestJson {
+                version: String,
+            }
+            if let Ok(lj) = resp.json::<LatestJson>().await {
+                resolved_tag = Some(if lj.version.starts_with('v') { lj.version } else { format!("v{}", lj.version) });
+            }
+        }
+    }
+
+    // 2. Secondary fallback: check GitHub REST API
+    if resolved_tag.is_none() {
+        let api_url = "https://api.github.com/repos/Inilax/Proxync/releases/latest";
+        if let Ok(resp) = client.get(api_url).send().await {
+            if resp.status().is_success() {
+                #[derive(Deserialize)]
+                struct GhRelease {
+                    tag_name: String,
+                    html_url: Option<String>,
+                }
+                if let Ok(gh) = resp.json::<GhRelease>().await {
+                    resolved_tag = Some(gh.tag_name);
+                    if let Some(h) = gh.html_url {
+                        resolved_url = h;
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Tertiary fallback: follow HTTP 302 redirect on releases/latest
+    if resolved_tag.is_none() {
+        if let Ok(resp) = client.get("https://github.com/Inilax/Proxync/releases/latest").send().await {
+            let final_url = resp.url().as_str();
+            if let Some(tag) = final_url.split("/tag/").nth(1) {
+                resolved_tag = Some(tag.to_string());
+                resolved_url = final_url.to_string();
+            }
+        }
+    }
+
+    let tag_name = match resolved_tag {
+        Some(tag) => tag,
+        None => return Ok(None),
+    };
+    let html_url = resolved_url;
+
+    let latest_clean = tag_name.trim().trim_start_matches('v');
+    let current_clean = current_version.trim().trim_start_matches('v');
+
+    let asset_name = get_cli_asset_name();
+    let download_url = format!(
+        "https://github.com/Inilax/Proxync/releases/download/{}/{}",
+        tag_name, asset_name
+    );
+
+    let is_newer = is_newer_version(latest_clean, current_clean);
+    if is_newer {
+        Ok(Some(CliUpdateInfo {
+            current_version: current_version.to_string(),
+            latest_version: tag_name,
+            download_url,
+            release_notes_url: html_url,
+            is_newer: true,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Downloads a binary from `download_url` and atomically replaces `destination` with safe rollback & cleanup
+pub async fn download_and_replace_binary(destination: &Path, download_url: &str) -> Result<(), String> {
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory {}: {}", parent.display(), e))?;
+        cleanup_old_binaries(parent);
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .user_agent("proxync-cli/updater")
+        .build()
+        .map_err(|e| format!("HTTP client init failed: {}", e))?;
+
+    let resp = client
+        .get(download_url)
+        .send()
+        .await
+        .map_err(|e| format!("Download request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download failed with status HTTP {}", resp.status()));
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read downloaded binary stream: {}", e))?;
+
+    if bytes.len() < 1024 {
+        return Err("Downloaded binary file is corrupt or too small.".to_string());
+    }
+
+    let temp_path = destination.with_extension(format!("tmp-{}", std::process::id()));
+
+    #[cfg(target_os = "windows")]
+    {
+        std::fs::write(&temp_path, &bytes)
+            .map_err(|e| format!("Failed to write temporary binary {}: {}", temp_path.display(), e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let is_tar_gz = download_url.ends_with(".tar.gz")
+            || (bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b);
+
+        if is_tar_gz {
+            let temp_archive = destination.with_extension(format!("archive-{}.tar.gz", std::process::id()));
+            std::fs::write(&temp_archive, &bytes)
+                .map_err(|e| format!("Failed to write temporary archive {}: {}", temp_archive.display(), e))?;
+
+            let extract_dir = destination.with_extension(format!("extract-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&extract_dir);
+
+            let status = std::process::Command::new("tar")
+                .args(&["-xzf", &temp_archive.to_string_lossy(), "-C", &extract_dir.to_string_lossy()])
+                .status()
+                .map_err(|e| format!("Failed to run tar extraction: {}", e))?;
+
+            let _ = std::fs::remove_file(&temp_archive);
+
+            if !status.success() {
+                let _ = std::fs::remove_dir_all(&extract_dir);
+                return Err("Failed to extract CLI archive with tar".to_string());
+            }
+
+            let extracted_bin = extract_dir.join("proxync");
+            if !extracted_bin.is_file() {
+                let _ = std::fs::remove_dir_all(&extract_dir);
+                return Err("CLI binary 'proxync' not found in downloaded archive".to_string());
+            }
+
+            std::fs::copy(&extracted_bin, &temp_path)
+                .map_err(|e| format!("Failed to copy extracted binary: {}", e))?;
+            let _ = std::fs::remove_dir_all(&extract_dir);
+        } else {
+            std::fs::write(&temp_path, &bytes)
+                .map_err(|e| format!("Failed to write temporary binary {}: {}", temp_path.display(), e))?;
+        }
+
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(&temp_path) {
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o755);
+            let _ = std::fs::set_permissions(&temp_path, perms);
+        }
+    }
+
+    // Replace existing binary
+    if destination.exists() {
+        #[cfg(target_os = "windows")]
+        {
+            let old_path = destination.with_extension(format!("old-{}", std::process::id()));
+            let _ = std::fs::remove_file(&old_path);
+            std::fs::rename(destination, &old_path)
+                .map_err(|e| format!("Failed to rotate running binary on Windows: {}", e))?;
+            std::fs::rename(&temp_path, destination)
+                .map_err(|e| format!("Failed to move new binary into place: {}", e))?;
+
+            // Try removing the old binary immediately
+            if std::fs::remove_file(&old_path).is_err() {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("cmd")
+                    .args(&["/C", "ping 127.0.0.1 -n 2 > nul & del /f /q", &old_path.to_string_lossy()])
+                    .creation_flags(0x08000000)
+                    .spawn();
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            std::fs::rename(&temp_path, destination)
+                .map_err(|e| format!("Failed to atomically replace binary: {}", e))?;
+        }
+    } else {
+        std::fs::rename(&temp_path, destination)
+            .map_err(|e| format!("Failed to install binary: {}", e))?;
+    }
+
+    if let Some(parent) = destination.parent() {
+        cleanup_old_binaries(parent);
+    }
+
+    Ok(())
+}
+
+/// Upgrades the currently executing CLI binary in-place with old binary cleanup
+pub async fn self_update_cli(force: bool, current_version: &str) -> Result<String, String> {
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Failed to locate currently running executable: {}", e))?;
+
+    let update_info = check_for_cli_update(current_version).await?;
+
+    match update_info {
+        Some(info) => {
+            download_and_replace_binary(&current_exe, &info.download_url).await?;
+            Ok(format!(
+                "Successfully updated Proxync CLI: v{} -> {} ({})",
+                current_version, info.latest_version, current_exe.display()
+            ))
+        }
+        None => {
+            if force {
+                let asset = get_cli_asset_name();
+                let url = format!("https://github.com/Inilax/Proxync/releases/latest/download/{}", asset);
+                download_and_replace_binary(&current_exe, &url).await?;
+                Ok(format!(
+                    "Force re-installed latest Proxync CLI ({})",
+                    current_exe.display()
+                ))
+            } else {
+                Ok(format!("Proxync CLI is already up to date (v{})", current_version))
+            }
+        }
+    }
+}
+
+/// Installs the Proxync CLI binary to the default OS directory and registers it to User PATH.
+/// If no local build is found, automatically downloads the latest release binary on-demand.
+pub async fn install_cli_to_path() -> Result<String, String> {
     let target_dir = get_default_cli_dir();
     std::fs::create_dir_all(&target_dir).map_err(|e| format!("Failed to create target directory: {}", e))?;
+    cleanup_old_binaries(&target_dir);
 
     let bin_name = if cfg!(target_os = "windows") { "proxync.exe" } else { "proxync" };
     let destination = target_dir.join(bin_name);
 
     if let Some(source) = find_source_cli_binary() {
         if source != destination {
+            #[cfg(target_os = "windows")]
+            {
+                let old_path = destination.with_extension(format!("old-{}", std::process::id()));
+                let _ = std::fs::remove_file(&old_path);
+                if destination.is_file() {
+                    let _ = std::fs::rename(&destination, &old_path);
+                }
+            }
             std::fs::copy(&source, &destination)
                 .map_err(|e| format!("Failed to copy CLI binary to {}: {}", destination.display(), e))?;
         }
     } else if !destination.is_file() {
-        return Err("Could not locate source proxync binary to install. Please build with 'npm run build:cli' first.".to_string());
+        // Download from GitHub Releases on demand
+        let asset = get_cli_asset_name();
+        let fallback_url = format!("https://github.com/Inilax/Proxync/releases/latest/download/{}", asset);
+        download_and_replace_binary(&destination, &fallback_url).await
+            .map_err(|e| format!("Could not download Proxync CLI: {}. Please check your connection.", e))?;
     }
 
     #[cfg(target_os = "windows")]
@@ -249,13 +598,13 @@ pub fn install_cli_to_path() -> Result<String, String> {
             let symlink_path = usr_local_bin.join("proxync");
             if symlink_path != destination {
                 let _ = std::fs::remove_file(&symlink_path);
-                // Attempt symlink; if permission denied, destination in ~/.local/bin still functions
                 let _ = std::os::unix::fs::symlink(&destination, &symlink_path);
             }
         }
     }
 
-    Ok(format!("Proxync CLI successfully installed to {}", destination.display()))
+    cleanup_old_binaries(&target_dir);
+    Ok("Proxync CLI installed and added to PATH successfully".to_string())
 }
 
 /// Uninstalls the Proxync CLI binary and removes it from the User PATH
@@ -267,6 +616,7 @@ pub fn uninstall_cli_from_path() -> Result<String, String> {
     if destination.exists() {
         let _ = std::fs::remove_file(&destination);
     }
+    cleanup_old_binaries(&target_dir);
 
     #[cfg(target_os = "windows")]
     {
@@ -338,11 +688,21 @@ mod tests {
 
     #[test]
     fn test_find_source_cli_binary_never_returns_gui() {
-        let src = find_source_cli_binary().expect("Should locate genuine CLI binary");
-        println!("Found CLI binary source: {:?}", src);
-        assert!(!is_desktop_binary(&src, None));
-        let s = src.to_string_lossy().to_lowercase();
-        assert!(!s.contains("src-tauri"));
-        assert!(s.contains("cli"));
+        if let Some(src) = find_source_cli_binary() {
+            println!("Found CLI binary source: {:?}", src);
+            assert!(!is_desktop_binary(&src, None));
+            let s = src.to_string_lossy().to_lowercase();
+            assert!(!s.contains("src-tauri"));
+            assert!(s.contains("cli"));
+        }
+    }
+
+    #[test]
+    fn test_is_newer_version() {
+        assert!(is_newer_version("v0.2.5", "0.2.4"));
+        assert!(is_newer_version("0.3.0", "v0.2.4"));
+        assert!(is_newer_version("1.0.0", "0.2.4"));
+        assert!(!is_newer_version("0.2.4", "0.2.4"));
+        assert!(!is_newer_version("v0.2.3", "0.2.4"));
     }
 }

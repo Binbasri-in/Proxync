@@ -1,4 +1,4 @@
-fn get_base_data_dir() -> std::path::PathBuf {
+pub fn get_base_data_dir() -> std::path::PathBuf {
     #[cfg(target_os = "windows")]
     let mut dir = if let Ok(appdata) = std::env::var("APPDATA") {
         std::path::PathBuf::from(appdata)

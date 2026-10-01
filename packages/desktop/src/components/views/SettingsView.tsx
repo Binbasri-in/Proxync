@@ -501,7 +501,7 @@ export function SettingsView({
                       className="form-input"
                       value={workspace?.projectRootPath ?? appSettings.defaultProjectRootPath}
                       onChange={(event) => onUpdateProjectRootPath(event.target.value)}
-                      placeholder="E:\path\to\project"
+                      placeholder="e.g. /path/to/project"
                     />
                   </div>
                   <div className="flex items-center gap-3">

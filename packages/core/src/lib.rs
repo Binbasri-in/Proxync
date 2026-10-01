@@ -10,3 +10,4 @@ pub mod tunnel;
 pub mod http;
 pub mod storage;
 pub mod cli_installer;
+pub mod registry;
