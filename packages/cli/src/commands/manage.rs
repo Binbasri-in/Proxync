@@ -106,6 +106,12 @@ pub async fn handle_stop(args: StopArgs) -> Result<(), Box<dyn std::error::Error
             }
         }
 
+        #[cfg(not(target_os = "windows"))]
+        if !exited {
+            let _ = Command::new("kill").args(["-KILL", &t.pid.to_string()]).output();
+            exited = !proxync_core::registry::is_process_alive(t.pid);
+        }
+
         if let Err(e) = proxync_core::registry::unregister_tunnel(&t.id) {
             eprintln!("\x1b[33mWarning: failed to update registry for tunnel {}: {}\x1b[0m", t.id, e);
         }

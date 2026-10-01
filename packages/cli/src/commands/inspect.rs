@@ -97,10 +97,14 @@ pub async fn handle_proxy(args: ProxyArgs) -> Result<(), Box<dyn std::error::Err
     let show_terminal_hotkey = show_terminal_arc.clone();
     let hotkey_tx = exit_tx.clone();
     tokio::task::spawn_blocking(move || {
+        let _raw_guard = crate::ui::RawModeGuard::new();
+        if !_raw_guard.is_active() {
+            return;
+        }
         loop {
             if crossterm::event::poll(std::time::Duration::from_millis(150)).unwrap_or(false) {
                 if let Ok(crossterm::event::Event::Key(key)) = crossterm::event::read() {
-                    if key.kind == crossterm::event::KeyEventKind::Press {
+                    if key.kind == crossterm::event::KeyEventKind::Press || key.kind == crossterm::event::KeyEventKind::Repeat {
                         match key.code {
                             crossterm::event::KeyCode::Char('c') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                                 let _ = hotkey_tx.blocking_send(());

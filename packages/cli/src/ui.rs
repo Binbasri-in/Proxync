@@ -120,10 +120,12 @@ pub fn copy_to_clipboard(text: &str) -> bool {
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
         use std::io::Write;
-        for tool in &["wl-copy", "xclip"] {
+        for tool in &["wl-copy", "xclip", "xsel"] {
             let mut cmd = std::process::Command::new(tool);
             if *tool == "xclip" {
                 cmd.arg("-selection").arg("clipboard");
+            } else if *tool == "xsel" {
+                cmd.arg("--clipboard").arg("--input");
             }
             cmd.stdin(std::process::Stdio::piped());
             if let Ok(mut child) = cmd.spawn() {
@@ -332,11 +334,45 @@ pub fn calculate_dir_size(path: &Path, depth: usize, max_depth: usize) -> u64 {
     total
 }
 
-pub struct RawModeGuard;
+pub struct RawModeGuard {
+    active: bool,
+}
+
+impl RawModeGuard {
+    pub fn new() -> Self {
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal() {
+            if crossterm::terminal::enable_raw_mode().is_ok() {
+                #[cfg(unix)]
+                {
+                    // Preserve OPOST / ONLCR so standard println! doesn't suffer the raw-mode staircase indent bug
+                    use std::os::unix::io::AsRawFd;
+                    unsafe {
+                        let fd = std::io::stdout().as_raw_fd();
+                        let mut termios: libc::termios = std::mem::zeroed();
+                        if libc::tcgetattr(fd, &mut termios) == 0 {
+                            termios.c_oflag |= (libc::OPOST as libc::tcflag_t) | (libc::ONLCR as libc::tcflag_t);
+                            libc::tcsetattr(fd, libc::TCSANOW, &termios);
+                        }
+                    }
+                }
+                return Self { active: true };
+            }
+        }
+        Self { active: false }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+}
+
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
-        let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
-        let _ = crossterm::terminal::disable_raw_mode();
+        if self.active {
+            let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
+            let _ = crossterm::terminal::disable_raw_mode();
+        }
     }
 }
 
@@ -346,13 +382,12 @@ pub fn interactive_port_picker(procs: &[proxync_core::recon::ProcessCandidate]) 
         event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
         execute,
         style::{Color, Print, ResetColor, SetForegroundColor},
-        terminal::{self, Clear, ClearType},
+        terminal::{Clear, ClearType},
     };
     use std::io::{stdout, Write};
 
     let mut stdout = stdout();
-    terminal::enable_raw_mode()?;
-    let _raw_guard = RawModeGuard;
+    let _raw_guard = RawModeGuard::new();
     let _ = execute!(stdout, cursor::Hide);
     let mut selected_idx = 0;
     let up_lines = (procs.len() + 1) as u16;

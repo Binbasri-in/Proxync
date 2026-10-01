@@ -1,5 +1,5 @@
 [package]
-name = "proxync"
+name = "proxync-desktop"
 version = "0.2.4"
 description = "Developer Tunneling Workspace Studio"
 authors = ["Inilax"]

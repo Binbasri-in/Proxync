@@ -1341,6 +1341,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "crossterm",
+ "libc",
  "proxync-core",
  "qrcode",
  "serde",

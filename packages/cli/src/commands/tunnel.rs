@@ -329,10 +329,14 @@ pub async fn handle_tunnel(args: TunnelArgs) -> Result<(), Box<dyn std::error::E
         let show_terminal_hotkey = show_terminal_arc.clone();
         let hotkey_tx_for_thread = hotkey_exit_tx.clone();
         tokio::task::spawn_blocking(move || {
+            let _raw_guard = crate::ui::RawModeGuard::new();
+            if !_raw_guard.is_active() {
+                return;
+            }
             loop {
                 if crossterm::event::poll(std::time::Duration::from_millis(150)).unwrap_or(false) {
                     if let Ok(crossterm::event::Event::Key(key)) = crossterm::event::read() {
-                        if key.kind == crossterm::event::KeyEventKind::Press {
+                        if key.kind == crossterm::event::KeyEventKind::Press || key.kind == crossterm::event::KeyEventKind::Repeat {
                             match key.code {
                                 crossterm::event::KeyCode::Char('c') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                                     let _ = hotkey_tx_for_thread.blocking_send(());
@@ -498,6 +502,12 @@ pub async fn spawn_detached_tunnel(args: &TunnelArgs) -> Result<(), Box<dyn std:
         use std::os::windows::process::CommandExt;
         // Try CREATE_BREAKAWAY_FROM_JOB (0x01000000) so daemon worker survives parent terminal/job teardown
         cmd.creation_flags(0x08000000 | 0x00000200 | 0x01000000);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // Detach child from controlling terminal process group so it survives terminal closure
+        cmd.process_group(0);
     }
 
     let child = match cmd.spawn() {

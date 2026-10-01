@@ -505,5 +505,12 @@ mod tests {
             _ => panic!("expected serve command"),
         }
     }
+
+    #[test]
+    fn test_raw_mode_guard_lifecycle() {
+        let guard = crate::ui::RawModeGuard::new();
+        let _ = guard.is_active();
+        drop(guard);
+    }
 }
 

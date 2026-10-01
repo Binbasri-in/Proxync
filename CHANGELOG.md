@@ -2,6 +2,33 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Cross-Platform CLI Hotkeys, Unix Raw Mode, Process Group Detachment & Desktop Crate Rename)
+- **Feature Summary**:
+  - **CLI Terminal Raw Mode & Hotkey Lifecycle (`packages/cli/src/ui.rs`, `commands/tunnel.rs`, `commands/inspect.rs`)**: Implemented RAII `RawModeGuard` checking `stdin().is_terminal()` and preserving Unix terminal post-processing (`libc::OPOST | libc::ONLCR`) to prevent raw-mode newline staircasing. Resolves POSIX cooked-mode stdin buffering on Linux and macOS so single-key interactive hotkeys (`o`, `c`, `q`, `s`, `t`, `l`, `h`) trigger immediately on keypress.
+  - **macOS / Linux Termios Type Compatibility (`packages/cli/src/ui.rs`)**: Cast termios flags explicitly to `libc::tcflag_t`, resolving type mismatch between macOS Darwin `u64` (`c_ulong`) and Linux `u32` (`c_uint`).
+  - **Unix Background Process Group Detachment (`packages/cli/src/commands/tunnel.rs`)**: Added `cmd.process_group(0)` (`setpgid(0, 0)`) in `spawn_detached_tunnel`, ensuring detached daemon workers survive terminal closure and parent shell teardown on Linux and macOS.
+  - **Linux Multi-Clipboard & Resilient Stop (`packages/cli/src/ui.rs`, `commands/manage.rs`)**: Added `xsel` fallback alongside `wl-copy` and `xclip` for clipboard copying. Added SIGKILL fallback after a 3-second timeout if graceful SIGTERM does not terminate uncooperative tunnel processes.
+  - **Desktop Crate Rename & macOS Edit Shortcuts (`packages/desktop/src-tauri/Cargo.toml`, `packages/core/src/cli_installer.rs`, `packages/desktop/src-tauri/src/lib.rs`, `packages/desktop/src/lib/hotkeys.ts`)**: Renamed desktop Tauri crate to `proxync-desktop` to eliminate cargo binary collisions with `proxync-cli`. Installed macOS standard application menu bar hook in Tauri to restore native Cmd+C/V/X/A WebKit edit shortcuts, and normalized frontend keyboard listeners with capture-phase dispatch.
+- **Modified Files**:
+  - `packages/cli/Cargo.lock`
+  - `packages/cli/Cargo.toml`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/commands/system.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/cli/src/ui.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `packages/desktop/src-tauri/Cargo.lock`
+  - `packages/desktop/src-tauri/Cargo.toml`
+  - `packages/desktop/src-tauri/src/lib.rs`
+  - `packages/desktop/src/App.tsx`
+  - `packages/desktop/src/components/views/KeyboardShortcutsDialog.tsx`
+  - `packages/desktop/src/components/views/PostmanView.tsx`
+  - `packages/desktop/src/components/views/WelcomeView.tsx`
+  - `packages/desktop/src/lib/hotkeys.ts`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Serve Tunnel Parity, Windows Path Quoting & URL Percent-Decode Test Suite)
 - **Feature Summary**:
   - **Serve Command Tunnel Feature Parity (`packages/cli/src/args.rs`, `commands/serve.rs`)**: Added `--basic-auth` (with `PROXYNC_BASIC_AUTH` env support) and `--expires` flags to `ServeArgs`, forwarding them directly into `handle_tunnel`. Enables password-protecting hosted static folders and setting auto-expiration durations directly from `proxync serve`.

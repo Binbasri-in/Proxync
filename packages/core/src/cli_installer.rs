@@ -117,7 +117,10 @@ fn is_desktop_binary(path: &Path, current_exe: Option<&Path>) -> bool {
         }
     }
     let s = path.to_string_lossy().to_lowercase();
-    s.contains("src-tauri") || s.contains("packages\\desktop") || s.contains("packages/desktop")
+    s.contains("src-tauri")
+        || s.contains("packages\\desktop")
+        || s.contains("packages/desktop")
+        || s.contains("proxync-desktop")
 }
 
 /// Checks if the Proxync CLI binary is installed and whether it is discoverable in PATH
@@ -693,6 +696,8 @@ mod tests {
     fn test_is_desktop_binary_filters_tauri_paths() {
         assert!(is_desktop_binary(Path::new(r"C:\repo\packages\desktop\src-tauri\target\release\proxync.exe"), None));
         assert!(is_desktop_binary(Path::new("/repo/packages/desktop/src-tauri/target/debug/proxync"), None));
+        assert!(is_desktop_binary(Path::new(r"C:\bin\proxync-desktop.exe"), None));
+        assert!(is_desktop_binary(Path::new("/usr/bin/proxync-desktop"), None));
         assert!(!is_desktop_binary(Path::new(r"C:\repo\packages\cli\target\release\proxync.exe"), None));
         assert!(!is_desktop_binary(Path::new("/repo/packages/cli/target/release/proxync"), None));
     }

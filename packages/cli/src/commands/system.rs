@@ -204,9 +204,12 @@ pub fn launch_gui() {
 
     #[cfg(target_os = "macos")]
     {
-        if std::path::Path::new("/Applications/Proxync.app").exists() {
-            let _ = Command::new("open").arg("-a").arg("Proxync").spawn();
-            println!("\x1b[32m✓ Launched Proxync GUI from /Applications/Proxync.app\x1b[0m");
+        let user_app = std::env::var("HOME").map(|h| format!("{}/Applications/Proxync.app", h)).unwrap_or_default();
+        if std::path::Path::new("/Applications/Proxync.app").exists()
+            || (!user_app.is_empty() && std::path::Path::new(&user_app).exists())
+            || Command::new("open").arg("-a").arg("Proxync").spawn().is_ok()
+        {
+            println!("\x1b[32m✓ Launched Proxync GUI\x1b[0m");
             return;
         }
     }
