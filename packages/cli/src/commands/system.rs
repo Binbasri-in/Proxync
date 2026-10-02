@@ -96,7 +96,7 @@ pub fn handle_doctor(args: DoctorArgs) -> Result<(), Box<dyn std::error::Error>>
     // 1. Edge cluster connectivity — actual TCP handshake to Proxync edge
     let edge_result = check_edge_connectivity();
     println!("  {} Edge cluster    : {}", status_icon(edge_result.is_ok()), 
-        edge_result.unwrap_or_else(|e| format!("UNREACHABLE ({})", e)));
+        edge_result.unwrap_or_else(|e| e));
 
     // 2. SSH toolchain presence
     let ssh_toolchain = check_ssh_toolchain();
@@ -143,15 +143,15 @@ fn check_edge_connectivity() -> Result<String, String> {
     let host = "api.proxync.dev";
     let target = format!("{}:443", host);
     let addr = target.to_socket_addrs()
-        .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?
+        .map_err(|_| "Not connected".to_string())?
         .next()
-        .ok_or_else(|| format!("Failed to resolve IP for {}", host))?;
+        .ok_or_else(|| "Not connected".to_string())?;
 
     std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2))
-        .map_err(|e| format!("Edge handshake failed: {}", e))?;
+        .map_err(|_| "Not connected".to_string())?;
 
     let latency = start.elapsed().as_millis();
-    Ok(format!("Connected to {} ({}ms)", host, latency))
+    Ok(format!("Connected ({}ms)", latency))
 }
 
 fn check_ssh_toolchain() -> Result<String, String> {

@@ -2,6 +2,13 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Doctor Edge Cluster Endpoint Privacy)
+- **Feature Summary**:
+  - **Edge Cluster Endpoint Privacy (`packages/cli/src/commands/system.rs`)**: Replaced raw server hostname `api.proxync.dev` in `proxync doctor` and `proxync doctor --verbose` output with clean status text (`Connected (XXms)` when reachable, `Not connected` when unreachable), keeping internal hostnames private from end-user diagnostic logs while preserving actual TCP handshake probing in code.
+- **Modified Files**:
+  - `packages/cli/src/commands/system.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Singleton Event Bridge, Hardened CLI Installer & Zero-Alloc Port Matcher)
 - **Feature Summary**:
   - **Singleton Event Bridge & Memory Leak Prevention (`packages/desktop/src-tauri/src/tunnel.rs`, `proxy.rs`)**: Replaced per-call event bridge task spawning with a process-global `OnceLock<EventSender>` bridge in `tunnel.rs`, reused by both tunnel handlers and proxy starter. Added explicit `RecvError::Lagged` handling to prevent dropouts during high-throughput bursts and clean termination on channel closure.
