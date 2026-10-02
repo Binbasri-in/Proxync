@@ -173,10 +173,13 @@ jobs:
         include:
           - platform: 'windows-latest'
             args: ''
+            targets: ''
           - platform: 'ubuntu-22.04'
             args: ''
+            targets: ''
           - platform: 'macos-latest'
             args: '--target universal-apple-darwin'
+            targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
     runs-on: ${{ matrix.platform }}
     permissions:
       contents: write
@@ -201,7 +204,7 @@ jobs:
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: stable
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.targets }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -210,6 +213,29 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Build Standalone CLI Companion
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            cargo build --release --manifest-path=packages/cli/Cargo.toml
+            cp packages/cli/target/release/proxync.exe proxync-windows-x86_64.exe
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            cargo build --release --manifest-path=packages/cli/Cargo.toml --target aarch64-apple-darwin
+            cargo build --release --manifest-path=packages/cli/Cargo.toml --target x86_64-apple-darwin
+            rm -rf dist-cli && mkdir -p dist-cli
+            lipo -create -output dist-cli/proxync \
+              packages/cli/target/aarch64-apple-darwin/release/proxync \
+              packages/cli/target/x86_64-apple-darwin/release/proxync
+            chmod +x dist-cli/proxync
+            tar -czf proxync-darwin-universal.tar.gz -C dist-cli proxync
+          else
+            cargo build --release --manifest-path=packages/cli/Cargo.toml
+            rm -rf dist-cli && mkdir -p dist-cli
+            cp packages/cli/target/release/proxync dist-cli/proxync
+            chmod +x dist-cli/proxync
+            tar -czf proxync-linux-x86_64.tar.gz -C dist-cli proxync
+          fi
 
       - name: Build app and publish GitHub Release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
@@ -227,3 +253,18 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+      - name: Upload Standalone CLI Artifact to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.prepare-tag.outputs.tag }}"
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            gh release upload "$TAG" proxync-windows-x86_64.exe --clobber
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            gh release upload "$TAG" proxync-darwin-universal.tar.gz --clobber
+          else
+            gh release upload "$TAG" proxync-linux-x86_64.tar.gz --clobber
+          fi

@@ -40,6 +40,8 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
             backend:
+              - 'packages/core/**'
+              - 'packages/cli/**'
               - 'packages/desktop/src-tauri/**'
               - 'packages/desktop/src-tauri/Cargo.*'
 
@@ -112,6 +114,14 @@ jobs:
       #   working-directory: ${{ env.PKG_DIR }}/src-tauri
       #   run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Run Cargo Tests
+      - name: Run Core Tests
+        working-directory: packages/core
+        run: cargo test
+
+      - name: Run CLI Tests
+        working-directory: packages/cli
+        run: cargo test
+
+      - name: Run Desktop Backend Tests
         working-directory: ${{ env.PKG_DIR }}/src-tauri
         run: cargo test

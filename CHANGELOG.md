@@ -2,6 +2,156 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Cross-Platform CLI Hotkeys, Unix Raw Mode, Process Group Detachment & Desktop Crate Rename)
+- **Feature Summary**:
+  - **CLI Terminal Raw Mode & Hotkey Lifecycle (`packages/cli/src/ui.rs`, `commands/tunnel.rs`, `commands/inspect.rs`)**: Implemented RAII `RawModeGuard` checking `stdin().is_terminal()` and preserving Unix terminal post-processing (`libc::OPOST | libc::ONLCR`) to prevent raw-mode newline staircasing. Resolves POSIX cooked-mode stdin buffering on Linux and macOS so single-key interactive hotkeys (`o`, `c`, `q`, `s`, `t`, `l`, `h`) trigger immediately on keypress.
+  - **macOS / Linux Termios Type Compatibility (`packages/cli/src/ui.rs`)**: Cast termios flags explicitly to `libc::tcflag_t`, resolving type mismatch between macOS Darwin `u64` (`c_ulong`) and Linux `u32` (`c_uint`).
+  - **Unix Background Process Group Detachment (`packages/cli/src/commands/tunnel.rs`)**: Added `cmd.process_group(0)` (`setpgid(0, 0)`) in `spawn_detached_tunnel`, ensuring detached daemon workers survive terminal closure and parent shell teardown on Linux and macOS.
+  - **Linux Multi-Clipboard & Resilient Stop (`packages/cli/src/ui.rs`, `commands/manage.rs`)**: Added `xsel` fallback alongside `wl-copy` and `xclip` for clipboard copying. Added SIGKILL fallback after a 3-second timeout if graceful SIGTERM does not terminate uncooperative tunnel processes.
+  - **Desktop Crate Rename & macOS Edit Shortcuts (`packages/desktop/src-tauri/Cargo.toml`, `packages/core/src/cli_installer.rs`, `packages/desktop/src-tauri/src/lib.rs`, `packages/desktop/src/lib/hotkeys.ts`)**: Renamed desktop Tauri crate to `proxync-desktop` to eliminate cargo binary collisions with `proxync-cli`. Installed macOS standard application menu bar hook in Tauri to restore native Cmd+C/V/X/A WebKit edit shortcuts, and normalized frontend keyboard listeners with capture-phase dispatch.
+- **Modified Files**:
+  - `packages/cli/Cargo.lock`
+  - `packages/cli/Cargo.toml`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/commands/system.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/cli/src/ui.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `packages/desktop/src-tauri/Cargo.lock`
+  - `packages/desktop/src-tauri/Cargo.toml`
+  - `packages/desktop/src-tauri/src/lib.rs`
+  - `packages/desktop/src/App.tsx`
+  - `packages/desktop/src/components/views/KeyboardShortcutsDialog.tsx`
+  - `packages/desktop/src/components/views/PostmanView.tsx`
+  - `packages/desktop/src/components/views/WelcomeView.tsx`
+  - `packages/desktop/src/lib/hotkeys.ts`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (Serve Tunnel Parity, Windows Path Quoting & URL Percent-Decode Test Suite)
+- **Feature Summary**:
+  - **Serve Command Tunnel Feature Parity (`packages/cli/src/args.rs`, `commands/serve.rs`)**: Added `--basic-auth` (with `PROXYNC_BASIC_AUTH` env support) and `--expires` flags to `ServeArgs`, forwarding them directly into `handle_tunnel`. Enables password-protecting hosted static folders and setting auto-expiration durations directly from `proxync serve`.
+  - **Windows Delayed File Cleanup Path Quoting (`packages/core/src/cli_installer.rs`)**: Hardened delayed binary cleanup by wrapping the file path argument in escaped double quotes (`format!("ping ... & del /f /q \"{}\"", old_path.display())`), preventing command syntax errors when user directories contain whitespace or ampersands.
+  - **URL Percent-Decode Test Suite & Export (`packages/cli/src/commands/serve.rs`, `main.rs`)**: Exported `percent_decode` as `pub(crate)` and added 4 targeted unit tests covering ASCII spaces (`%20`), plus signs (`+`), multi-byte UTF-8 emojis/kanji (`%F0%9F%9A%80`, `%E5%B1%B1%E7%94%B0`), malformed sequences (`100%`, `%ZZ`), and CLI argument parsing.
+- **Modified Files**:
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (CLI UTF-8 Safety, Auth Exposure Guard, Log Stream Tail & Desktop Bridge Consolidation)
+- **Feature Summary**:
+  - **UTF-8 Character Boundary Truncation (`packages/cli/src/ui.rs`, `commands/scan.rs`, `commands/inspect.rs`)**: Replaced byte slicing (`&s[..len]`) with `truncate_str` and `truncate_path_tail` across table rendering, path summaries, and request body previews, eliminating panic crashes on multibyte characters, emojis, or international file paths.
+  - **Tunnel Basic Auth Validation & Failure Hardening (`packages/cli/src/commands/tunnel.rs`)**: Added validation for the `--basic-auth user:pass` format and an exit failure if the authentication proxy fails to bind, preventing accidental unauthenticated public tunnel exposure.
+  - **Vite Tunnel Guard & Desktop Parity (`packages/cli/src/commands/tunnel.rs`, `main.rs`)**: Re-aligned CLI tunnel creation with desktop application behavior by detecting Vite dev servers, warning of Cloudflare edge host-header blocking / HMR disconnects, and requiring `--force` to tunnel Vite dev servers.
+  - **Reliable Log Stream Streaming (`packages/cli/src/commands/logs.rs`)**: Replaced partial string chunking with byte-buffered complete-line streaming up to the last newline (`\n`), eliminating JSON log dropouts and corrupted line fragments during rapid traffic bursts.
+  - **Static File Serving & Path Handling (`packages/cli/src/commands/serve.rs`, `args.rs`)**: Added `percent_decode` for static URL paths, added explicit `Connection: close` and CORS headers on error responses (403, 404, 405, 413), and routed path prefixes (`./`, `.\`, `/`, `\`) directly to `serve` mode with clean error diagnostics.
+  - **Cross-Platform Process Tree Termination (`packages/cli/src/commands/manage.rs`)**: Added Unix process tree termination (`pkill -TERM -P`) before parent PID termination to prevent orphaned child processes, matching Windows job-object process tree management.
+  - **Singleton Desktop Event Bridge (`packages/desktop/src-tauri/src/bridge.rs`, `lib.rs`, `tunnel.rs`, `proxy.rs`)**: Consolidated Tauri event forwarding into a dedicated singleton `bridge.rs` module, preventing duplicate event task loops between tunnel creation and proxy handlers.
+- **Modified Files**:
+  - `packages/cli/src/ui.rs`
+  - `packages/cli/src/commands/scan.rs`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/commands/logs.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/registry.rs`
+  - `packages/desktop/src-tauri/src/bridge.rs`
+  - `packages/desktop/src-tauri/src/lib.rs`
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/desktop/src-tauri/src/tunnel.rs`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (Installer GUI URL Resolution & Linux ARM64 Fallback)
+- **Feature Summary**:
+  - **Installer Script Version Auto-Resolution (`scripts/install.ps1`, `scripts/install.sh`)**: Added automatic resolution of the latest release version tag via GitHub releases API and static `latest.json` fallback when `$Version`/`$VERSION` is omitted. Eliminates 404 download errors on GUI installers (`-Gui` / `--gui`) caused by empty version string interpolations.
+  - **Linux ARM64 Fallback Guidance (`scripts/install.sh`)**: Added graceful detection for Linux `aarch64` architectures with fallback to `cargo install` compilation and clear user guidance instead of crashing with a raw download 404.
+- **Modified Files**:
+  - `scripts/install.ps1`
+  - `scripts/install.sh`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (Doctor Edge Cluster Endpoint Privacy)
+- **Feature Summary**:
+  - **Edge Cluster Endpoint Privacy (`packages/cli/src/commands/system.rs`)**: Replaced raw server hostname `api.proxync.dev` in `proxync doctor` and `proxync doctor --verbose` output with clean status text (`Connected (XXms)` when reachable, `Not connected` when unreachable), keeping internal hostnames private from end-user diagnostic logs while preserving actual TCP handshake probing in code.
+- **Modified Files**:
+  - `packages/cli/src/commands/system.rs`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (Singleton Event Bridge, Hardened CLI Installer & Zero-Alloc Port Matcher)
+- **Feature Summary**:
+  - **Singleton Event Bridge & Memory Leak Prevention (`packages/desktop/src-tauri/src/tunnel.rs`, `proxy.rs`)**: Replaced per-call event bridge task spawning with a process-global `OnceLock<EventSender>` bridge in `tunnel.rs`, reused by both tunnel handlers and proxy starter. Added explicit `RecvError::Lagged` handling to prevent dropouts during high-throughput bursts and clean termination on channel closure.
+  - **PowerShell Injection Hardening (`packages/core/src/cli_installer.rs`)**: Process-isolated Windows PATH updates by passing installation and uninstallation target directories via environment variables (`PROXYNC_INSTALL_DIR`, `PROXYNC_UNINSTALL_DIR`), adding `-NonInteractive`, and suppressing flashing command windows via `CREATE_NO_WINDOW (0x08000000)`.
+  - **Zero-Alloc Stack Buffer Port Matcher (`packages/cli/src/ui.rs`)**: Replaced heap allocations in `contains_discrete_port` with a stack-allocated 5-byte buffer, implementing multi-occurrence scanning with strict ASCII boundary checks to prevent prefix/suffix false matches in high-frequency log streams.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/src/tunnel.rs`
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `packages/cli/src/ui.rs`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (Tauri Ecosystem Dependency Bump)
+- **Feature Summary**:
+  - **Tauri Ecosystem Bump (Rust + NPM)**: Updated all Tauri 2.x Rust crates (`tauri 2.11.6→2.12.1`, `tauri-build 2.6.3→2.7.1`, `tauri-plugin-autostart 2.5.1→2.7.0`, `tauri-plugin-dialog 2.7.3→2.8.1`, `tauri-plugin-opener 2.5.5→2.7.0`, `tauri-plugin-process 2.3.1→2.4.0`, `tauri-plugin-updater 2.12.0→2.13.1`) alongside their paired `@tauri-apps/*` npm packages in `packages/desktop/package.json`, resolving the Dependabot PR #262 in lockstep to keep Rust backend and TypeScript frontend IPC bindings in version parity.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/Cargo.lock`
+  - `packages/desktop/package.json`
+  - `package-lock.json`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-10-02 (CLI Modularization, Parity Alignment & Tunnel Registry)
+- **Feature Summary**:
+  - **CLI Modularization & Architecture Splitting**: Refactored monolithic 2,800+ line `main.rs` into dedicated modules under `packages/cli/src/`: `args.rs` (clap CLI grammar), `ui.rs` (terminal formatting, banners, half-block QR code), and `commands/` (`scan`, `tunnel`, `inspect`, `serve`, `manage`, `logs`, `system`).
+  - **Desktop Subdomain Parity & Cleanup**: Removed non-standard `--subdomain` flag from CLI commands to enforce 1:1 parity with the Desktop application, ensuring all Native SSH tunnels assign secure collision-free subdomains (`px-*`).
+  - **CLI Command Hotkey & Shorthand Robustness**: Resolved argument parsing edge cases where flags passed after a numeric port shorthand (e.g. `proxync 4000 --help`) failed to resolve correctly.
+  - **Tunnel Registry & Background Lifecycle**: Implemented `packages/core/src/registry.rs` for tracking active foreground/background tunnels, process identification, and persistent status monitoring across `proxync ps`, `proxync status`, and `proxync stop`.
+- **Modified Files**:
+  - `packages/cli/src/main.rs`
+  - `packages/cli/src/args.rs`
+  - `packages/cli/src/ui.rs`
+  - `packages/cli/src/commands/mod.rs`
+  - `packages/cli/src/commands/scan.rs`
+  - `packages/cli/src/commands/tunnel.rs`
+  - `packages/cli/src/commands/inspect.rs`
+  - `packages/cli/src/commands/serve.rs`
+  - `packages/cli/src/commands/manage.rs`
+  - `packages/cli/src/commands/logs.rs`
+  - `packages/cli/src/commands/system.rs`
+  - `packages/core/src/registry.rs`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-09-27 (Cross-Platform Windows Installation & Git Bash Installer Support)
+- **Feature Summary**:
+  - **Git Bash & MSYS2 Installer (`scripts/install.sh`)**: Added platform detection for `mingw*`, `msys*`, and `cygwin*` to download `proxync-windows-x86_64.exe` directly on Windows, installing into `%LOCALAPPDATA%\Programs\Proxync\bin\` and invoking `setup-path` to register in the Windows User `PATH`.
+  - **Standalone Binary Self-Registration (`packages/core/src/cli_installer.rs`)**: Updated `find_source_cli_binary()` to recognize when `current_exe` is already a standalone `proxync.exe`, allowing users to download the `.exe` directly via curl/browser and run `proxync.exe setup-path` from anywhere.
+  - **Windows Command Prompt & Built-in curl Documentation (`README.md`)**: Added explicit one-liner installation documentation for PowerShell (`irm ... | iex`), CMD bridge (`powershell -c "irm ... | iex"`), and native Windows `curl.exe` with `setup-path`.
+- **Modified Files**:
+  - `README.md`
+  - `packages/core/src/cli_installer.rs`
+  - `scripts/install.sh`
+  - `CHANGELOG.md`
+
+## [feat/cli-companion] - 2026-09-27 (Static Directory Serving, Half-Block QR Codes, Live Proxy Capture, Hotkeys & Parity)
+- **Feature Summary**:
+  - **Static Directory Serving (`proxync serve [PATH]`)**: Added built-in static web server with automatic ephemeral port binding, MIME type resolution, directory traversal protection (`starts_with(&root)`), SPA routing fallback to `index.html`, and instant public tunneling.
+  - **Compact Half-Block Unicode QR Code (`--qr` & `q` key)**: Integrated `Dense1x2` Unicode half-block rendering (`▀`, `▄`, `█`, ` `) from the `qrcode` crate, reducing QR terminal footprint by 50% in both height (19 lines) and width (37 columns) for instant mobile scanning without terminal scrolling.
+  - **Live HTTP Traffic Interception**: Interposed `proxync_core::proxy::start_proxy` into the public tunnel path, ensuring all incoming tunnel traffic across Native SSH, Cloudflare, and Relay is captured, measured in live stats, and streamed in real-time (`--> GET /path`, `<-- 200 (8ms)`).
+  - **Interactive Terminal Hotkeys & Persistent Option Bar**: Added non-blocking hotkey listener with single-key shortcuts: `c` (copy URL to clipboard), `q` (display QR code), `s` (live request metrics & latency), `t` (mute/unmute traffic stream), `l` (clear screen), and `h`/`?` (help). Automatically re-prints the hotkey bar after every action to eliminate scroll fatigue.
+  - **Auto-Clipboard URL Copy**: Silently copies public tunnel URL to system clipboard upon connection across Windows (`clip` with hidden window flags), macOS (`pbcopy`), and Linux (`wl-copy`/`xclip`).
+  - **CLI Session Logs (`proxync logs`)**: Added logs inspection subcommand supporting last `-n` lines, real-time follow/streaming (`-f`/`--tail`), and log clearing (`--clear`) with automatic 5MB rotation in `proxync-core/storage.rs`.
+  - **Desktop Subdomain Parity**: Enforced strict parity with the Desktop application by removing custom `--subdomain` flag from the CLI, guaranteeing Native SSH tunnels assign secure, collision-free automatic subdomains (`px-*`).
+- **Modified Files**:
+  - `packages/cli/Cargo.lock`
+  - `packages/cli/Cargo.toml`
+  - `packages/cli/src/main.rs`
+  - `packages/core/src/storage.rs`
+  - `CHANGELOG.md`
+
 ## [fix/sidebar-toggle-and-window-constraints] - 2026-09-28 (Sidebar Toggle Relocation, Workspace Search Shortcut Badge & Window Dimension Constraints)
 - **Feature Summary**:
   - **Sidebar Toggle Repositioning**: Moved sidebar toggle button from the global titlebar to directly beside "Proxync Engine" in the sidebar header for a cleaner and more intuitive navigation flow. In collapsed mode, rendered an expand (`menu_open`) button.
@@ -12,7 +162,7 @@ All notable changes to the Proxync workspace studio project are documented here.
   - `packages/desktop/src/App.tsx`
   - `CHANGELOG.md`
 
-## [fix/v0.2.4-version-bump] - 2026-09-27 (Workspace & Studio Version Bump to v0.2.4 for Next Release Cycle)
+## [feat/cli-companion] - 2026-09-27 (Cross-Platform PATH Installer, Studio Settings Integration & Production Release Bundling)
 - **Feature Summary**:
   - **Comprehensive Version Bump to v0.2.4**: Synchronized workspace and package manifests (`package.json`, `packages/desktop/package.json`, `package-lock.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`) to version `0.2.4`.
   - **Native HTTP Network Headers & Diagnostics**: Updated Rust client diagnostic banner in `storage.rs` to `Proxync v0.2.4 (Engine: Tauri v2.11 Core)`. Synchronized frontend diagnostic logging metadata, log session directives, and support bundle fallbacks in `App.tsx` and `logger.ts` to `v0.2.4-stable`.
