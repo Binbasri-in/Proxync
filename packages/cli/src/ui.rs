@@ -220,20 +220,35 @@ pub fn is_tunnel_closure_log_line(line: &str, port: u16) -> bool {
     is_closure && contains_discrete_port(line, port)
 }
 
+// ponytail: zero-alloc stack buffer for u16 port string matching during high-frequency log scans.
 pub fn contains_discrete_port(line: &str, port: u16) -> bool {
-    let port_str = port.to_string();
-    for pattern in &[
-        format!("port {}", port_str),
-        format!(":{}", port_str),
-        format!("({})", port_str),
-    ] {
-        if let Some(pos) = line.find(pattern) {
-            let end = pos + pattern.len();
-            // Ensure the next char is not a digit (prevents 80 matching 8080 or 40 matching 4000)
-            let is_end_of_token = line.as_bytes().get(end).map(|b| !b.is_ascii_digit()).unwrap_or(true);
-            if is_end_of_token {
-                return true;
+    let mut buf = [0u8; 5];
+    let port_str = {
+        use std::io::Write;
+        let mut cursor = std::io::Cursor::new(&mut buf[..]);
+        let _ = write!(cursor, "{}", port);
+        let len = cursor.position() as usize;
+        std::str::from_utf8(&buf[..len]).unwrap_or("")
+    };
+    if port_str.is_empty() {
+        return false;
+    }
+
+    let prefixes = ["port ", ":", "("];
+    for prefix in prefixes {
+        let mut search_from = 0;
+        while let Some(rel_pos) = line[search_from..].find(prefix) {
+            let pos = search_from + rel_pos;
+            let after_prefix = pos + prefix.len();
+            if line[after_prefix..].starts_with(port_str) {
+                let end = after_prefix + port_str.len();
+                // Ensure the next char is not a digit (prevents 80 matching 8080 or 40 matching 4000)
+                let is_end_of_token = line.as_bytes().get(end).map(|b| !b.is_ascii_digit()).unwrap_or(true);
+                if is_end_of_token {
+                    return true;
+                }
             }
+            search_from = pos + prefix.len();
         }
     }
     false

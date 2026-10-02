@@ -545,25 +545,30 @@ pub async fn install_cli_to_path() -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        // Add target_dir to Windows User PATH via PowerShell
-        let dir_str = target_dir.to_string_lossy().to_string();
-        let ps_cmd = format!(
-            "$dir = '{}'; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
-             if ($p -notlike ('*' + $dir + '*')) {{ \
-                 $newP = if ([string]::IsNullOrEmpty($p)) {{ $dir }} else {{ ($p.TrimEnd(';') + ';' + $dir) }}; \
-                 [Environment]::SetEnvironmentVariable('Path', $newP, 'User'); \
-             }}",
-            dir_str.replace('\'', "''")
-        );
-
+        // Add target_dir to Windows User PATH via PowerShell.
+        // ponytail: pass dir via process-isolated env var to eliminate any CWE-78 command injection.
         let mut cmd = std::process::Command::new("powershell");
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
+        cmd.env("PROXYNC_INSTALL_DIR", &target_dir);
         let status = cmd
-            .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_cmd])
+            .args(&[
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle", "Hidden",
+                "-Command",
+                "$dir = $env:PROXYNC_INSTALL_DIR; \
+                 if ($dir) { \
+                     $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
+                     if ($p -notlike ('*' + $dir + '*')) { \
+                         $newP = if ([string]::IsNullOrEmpty($p)) { $dir } else { ($p.TrimEnd(';') + ';' + $dir) }; \
+                         [Environment]::SetEnvironmentVariable('Path', $newP, 'User'); \
+                     } \
+                 }",
+            ])
             .status()
             .map_err(|e| format!("Failed to execute PowerShell PATH update: {}", e))?;
 
@@ -620,24 +625,29 @@ pub fn uninstall_cli_from_path() -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        let dir_str = target_dir.to_string_lossy().to_string();
-        let ps_cmd = format!(
-            "$cleanDir = '{}'.TrimEnd('\\').ToLower(); \
-             $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
-             if ($p) {{ \
-                 $parts = $p -split ';' | Where-Object {{ $_ -and $_.Trim().TrimEnd('\\').ToLower() -ne $cleanDir }}; \
-                 [Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User'); \
-             }}",
-            dir_str.replace('\'', "''")
-        );
-
+        // ponytail: pass dir via process-isolated env var to eliminate any CWE-78 command injection.
         let mut cmd = std::process::Command::new("powershell");
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
-        let _ = cmd.args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_cmd]).status();
+        cmd.env("PROXYNC_UNINSTALL_DIR", &target_dir);
+        let _ = cmd.args(&[
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle", "Hidden",
+            "-Command",
+            "$dir = $env:PROXYNC_UNINSTALL_DIR; \
+             if ($dir) { \
+                 $cleanDir = $dir.TrimEnd('\\').ToLower(); \
+                 $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
+                 if ($p) { \
+                     $parts = $p -split ';' | Where-Object { $_ -and $_.Trim().TrimEnd('\\').ToLower() -ne $cleanDir }; \
+                     [Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User'); \
+                 } \
+             }",
+        ]).status();
 
         // Also remove target_dir from current process in-memory PATH
         if let Some(curr_path) = std::env::var_os("PATH") {

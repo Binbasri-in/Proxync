@@ -2,6 +2,18 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Singleton Event Bridge, Hardened CLI Installer & Zero-Alloc Port Matcher)
+- **Feature Summary**:
+  - **Singleton Event Bridge & Memory Leak Prevention (`packages/desktop/src-tauri/src/tunnel.rs`, `proxy.rs`)**: Replaced per-call event bridge task spawning with a process-global `OnceLock<EventSender>` bridge in `tunnel.rs`, reused by both tunnel handlers and proxy starter. Added explicit `RecvError::Lagged` handling to prevent dropouts during high-throughput bursts and clean termination on channel closure.
+  - **PowerShell Injection Hardening (`packages/core/src/cli_installer.rs`)**: Process-isolated Windows PATH updates by passing installation and uninstallation target directories via environment variables (`PROXYNC_INSTALL_DIR`, `PROXYNC_UNINSTALL_DIR`), adding `-NonInteractive`, and suppressing flashing command windows via `CREATE_NO_WINDOW (0x08000000)`.
+  - **Zero-Alloc Stack Buffer Port Matcher (`packages/cli/src/ui.rs`)**: Replaced heap allocations in `contains_discrete_port` with a stack-allocated 5-byte buffer, implementing multi-occurrence scanning with strict ASCII boundary checks to prevent prefix/suffix false matches in high-frequency log streams.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/src/tunnel.rs`
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/core/src/cli_installer.rs`
+  - `packages/cli/src/ui.rs`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Tauri Ecosystem Dependency Bump)
 - **Feature Summary**:
   - **Tauri Ecosystem Bump (Rust + NPM)**: Updated all Tauri 2.x Rust crates (`tauri 2.11.6→2.12.1`, `tauri-build 2.6.3→2.7.1`, `tauri-plugin-autostart 2.5.1→2.7.0`, `tauri-plugin-dialog 2.7.3→2.8.1`, `tauri-plugin-opener 2.5.5→2.7.0`, `tauri-plugin-process 2.3.1→2.4.0`, `tauri-plugin-updater 2.12.0→2.13.1`) alongside their paired `@tauri-apps/*` npm packages in `packages/desktop/package.json`, resolving the Dependabot PR #262 in lockstep to keep Rust backend and TypeScript frontend IPC bindings in version parity.
