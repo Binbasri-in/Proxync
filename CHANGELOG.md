@@ -2,6 +2,15 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Tauri Ecosystem Dependency Bump)
+- **Feature Summary**:
+  - **Tauri Ecosystem Bump (Rust + NPM)**: Updated all Tauri 2.x Rust crates (`tauri 2.11.6→2.12.1`, `tauri-build 2.6.3→2.7.1`, `tauri-plugin-autostart 2.5.1→2.7.0`, `tauri-plugin-dialog 2.7.3→2.8.1`, `tauri-plugin-opener 2.5.5→2.7.0`, `tauri-plugin-process 2.3.1→2.4.0`, `tauri-plugin-updater 2.12.0→2.13.1`) alongside their paired `@tauri-apps/*` npm packages in `packages/desktop/package.json`, resolving the Dependabot PR #262 in lockstep to keep Rust backend and TypeScript frontend IPC bindings in version parity.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/Cargo.lock`
+  - `packages/desktop/package.json`
+  - `package-lock.json`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (CLI Modularization, Parity Alignment & Tunnel Registry)
 - **Feature Summary**:
   - **CLI Modularization & Architecture Splitting**: Refactored monolithic 2,800+ line `main.rs` into dedicated modules under `packages/cli/src/`: `args.rs` (clap CLI grammar), `ui.rs` (terminal formatting, banners, half-block QR code), and `commands/` (`scan`, `tunnel`, `inspect`, `serve`, `manage`, `logs`, `system`).
