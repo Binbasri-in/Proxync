@@ -12,6 +12,23 @@ $Repo = "Inilax/Proxync"
 
 Write-Host "==> Installing Proxync for Windows (x64)..." -ForegroundColor Cyan
 
+# Auto-resolve latest release version if not explicitly passed
+if (-not $Version) {
+    try {
+        $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing -TimeoutSec 4
+        if ($Latest -and $Latest.tag_name) {
+            $Version = $Latest.tag_name
+        }
+    } catch {
+        try {
+            $LatestJson = Invoke-RestMethod -Uri "https://github.com/$Repo/releases/latest/download/latest.json" -UseBasicParsing -TimeoutSec 4
+            if ($LatestJson -and $LatestJson.version) {
+                $Version = if ($LatestJson.version.StartsWith('v')) { $LatestJson.version } else { "v$($LatestJson.version)" }
+            }
+        } catch {}
+    }
+}
+
 $InstallDir = "$env:LOCALAPPDATA\Programs\Proxync\bin"
 if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
@@ -85,8 +102,12 @@ Write-Host "[OK] Proxync CLI installed to $TargetPath" -ForegroundColor Green
 # Install Desktop GUI if requested
 if ($Gui) {
     Write-Host "==> Fetching Proxync Desktop GUI Installer..." -ForegroundColor Cyan
-    $VerNum = $Version.TrimStart('v')
-    $GuiInstallerUrl = "https://github.com/$Repo/releases/download/$Version/Proxync_${VerNum}_x64-setup.exe"
+    $VerNum = if ($Version) { $Version.TrimStart('v') } else { "" }
+    $GuiInstallerUrl = if ($Version -and $VerNum) {
+        "https://github.com/$Repo/releases/download/$Version/Proxync_${VerNum}_x64-setup.exe"
+    } else {
+        "https://github.com/$Repo/releases/latest/download/Proxync_x64-setup.exe"
+    }
     $TempInstaller = Join-Path $env:TEMP "proxync-gui-setup.exe"
     try {
         Invoke-WebRequest -Uri $GuiInstallerUrl -OutFile $TempInstaller -UseBasicParsing

@@ -2,6 +2,15 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feat/cli-companion] - 2026-10-02 (Installer GUI URL Resolution & Linux ARM64 Fallback)
+- **Feature Summary**:
+  - **Installer Script Version Auto-Resolution (`scripts/install.ps1`, `scripts/install.sh`)**: Added automatic resolution of the latest release version tag via GitHub releases API and static `latest.json` fallback when `$Version`/`$VERSION` is omitted. Eliminates 404 download errors on GUI installers (`-Gui` / `--gui`) caused by empty version string interpolations.
+  - **Linux ARM64 Fallback Guidance (`scripts/install.sh`)**: Added graceful detection for Linux `aarch64` architectures with fallback to `cargo install` compilation and clear user guidance instead of crashing with a raw download 404.
+- **Modified Files**:
+  - `scripts/install.ps1`
+  - `scripts/install.sh`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Doctor Edge Cluster Endpoint Privacy)
 - **Feature Summary**:
   - **Edge Cluster Endpoint Privacy (`packages/cli/src/commands/system.rs`)**: Replaced raw server hostname `api.proxync.dev` in `proxync doctor` and `proxync doctor --verbose` output with clean status text (`Connected (XXms)` when reachable, `Not connected` when unreachable), keeping internal hostnames private from end-user diagnostic logs while preserving actual TCP handshake probing in code.
