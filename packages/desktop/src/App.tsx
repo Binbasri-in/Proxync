@@ -59,6 +59,7 @@ import { KeyboardShortcutsDialog } from './components/views/KeyboardShortcutsDia
 import { RequestWorkbenchDialog } from './components/views/RequestWorkbenchDialog';
 import { TerminalDrawer, type TerminalLogEntry } from './components/ui/TerminalDrawer';
 import type { WorkbenchTab, ExecutionRun } from './lib/types';
+import { isMac, isPrimaryModifier, isKey, isInputFocused } from './lib/hotkeys';
 import {
   initLogger,
   setAppLogging,
@@ -350,14 +351,7 @@ export default function App() {
     return getDesktopSidebarPref();
   });
 
-  // Cross-platform OS key detection (macOS vs Windows/Linux)
-  const isMac = useMemo(() => {
-    if (typeof navigator === 'undefined') return false;
-    return (
-      /Mac|iPod|iPhone|iPad/i.test(navigator.platform) ||
-      /Macintosh|Mac OS X/i.test(navigator.userAgent)
-    );
-  }, []);
+
 
   // Enforce desktop minimum window size constraints (700x500, like Docker Desktop)
   useEffect(() => {
@@ -415,26 +409,25 @@ export default function App() {
   // Global hotkeys: Ctrl+B / Cmd+B (sidebar), Ctrl+K / Cmd+K (search), Ctrl+/ / Cmd+/ (shortcuts), Ctrl+` / Cmd+` (console)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+      const primaryMod = isPrimaryModifier(e);
+      if (primaryMod && isKey(e, 'b', 'KeyB')) {
+        if (!isInputFocused(e.target)) {
           e.preventDefault();
           toggleSidebar();
         }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      } else if (primaryMod && isKey(e, 'k', 'KeyK')) {
         e.preventDefault();
         setSearchOpen(true);
         setTimeout(() => {
           searchInputRef.current?.focus();
           searchInputRef.current?.select();
         }, 30);
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === '?' || e.key === '/' || e.code === 'Slash')) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+      } else if (primaryMod && (e.key === '?' || e.key === '/' || e.code === 'Slash')) {
+        if (!isInputFocused(e.target)) {
           e.preventDefault();
           setShortcutsModalOpen((prev) => !prev);
         }
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.code === 'Backquote')) {
+      } else if (primaryMod && (e.key === '`' || e.code === 'Backquote')) {
         e.preventDefault();
         setTerminalOpen((prev) => !prev);
       } else if (e.key === 'Escape') {
@@ -446,8 +439,8 @@ export default function App() {
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [searchOpen, shortcutsModalOpen]);
 
   // Click outside to dismiss workspace search dropdown

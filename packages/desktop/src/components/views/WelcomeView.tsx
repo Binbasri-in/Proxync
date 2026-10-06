@@ -3,6 +3,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Tunnel, RequestLog } from './SharedComponents';
 import { SignalBars, getTunnelMetadata } from './SharedComponents';
 import { showToast } from '../../lib/toast';
+import { isPrimaryModifier, isKey, isInputFocused } from '../../lib/hotkeys';
 
 export function WelcomeView({
   tunnels,
@@ -50,9 +51,8 @@ export function WelcomeView({
   // Hotkey: Ctrl+Shift+X / Cmd+Shift+X to Stop All Active Tunnels
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'x' || e.key === 'X')) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+      if (isPrimaryModifier(e) && e.shiftKey && isKey(e, 'x', 'KeyX')) {
+        if (!isInputFocused(e.target)) {
           e.preventDefault();
           if (activeTunnels.length > 0) {
             if (onStopAllTunnels) {
@@ -65,8 +65,8 @@ export function WelcomeView({
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [activeTunnels, onStopAllTunnels, onStopTunnel]);
 
   useEffect(() => {
