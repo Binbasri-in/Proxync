@@ -2,6 +2,24 @@
 
 All notable changes to the Proxync workspace studio project are documented here.
 
+## [feature/develop-tunnel-basic-auth] - 2026-10-06 (HTTP Basic Authentication for Public Tunnels in Desktop GUI)
+- **Feature Summary**:
+  - **HTTP Basic Authentication GUI Controls (`packages/desktop/src/components/views/Dialogs.tsx`, `packages/desktop/src/lib/types.ts`)**: Added an expandable toggle and credential inputs (`username` and `password`) to the Tunnel Launch Dialog and unified launch options.
+  - **Quick-Action & View Launch Integration (`packages/desktop/src/App.tsx`, `ProcessView.tsx`, `WelcomeView.tsx`, `WorkspaceDashboardView.tsx`, `PostmanView.tsx`)**: Extended process cards and launch triggers across the dashboard, process list, and welcome view to accept and pass basic authentication configurations.
+  - **Backend IPC Proxy Parameter Propagation (`packages/desktop/src-tauri/src/proxy.rs`)**: Updated Tauri `start_tunnel` IPC command invocation to serialize and map optional `basic_auth` (`user:pass`) through to the core tunnel client.
+  - **CWE-312 Sensitive Storage Guard (`packages/desktop/src/App.tsx`)**: Sanitized active tunnel persistence in `localStorage` to strip credentials and retain only non-sensitive metadata, preventing unencrypted password storage.
+  - **Session Password Cache & Compact Amber Lock UI (`packages/desktop/src/components/views/Dialogs.tsx`, `WorkspaceDashboardView.tsx`, `WelcomeView.tsx`, `ProcessView.tsx`)**: Added in-memory session password retention and username persistence across tunnel modal launches, and replaced bulky text badges with compact amber lock icons across process cards.
+- **Modified Files**:
+  - `packages/desktop/src-tauri/src/proxy.rs`
+  - `packages/desktop/src/App.tsx`
+  - `packages/desktop/src/components/views/Dialogs.tsx`
+  - `packages/desktop/src/components/views/PostmanView.tsx`
+  - `packages/desktop/src/components/views/ProcessView.tsx`
+  - `packages/desktop/src/components/views/WelcomeView.tsx`
+  - `packages/desktop/src/components/views/WorkspaceDashboardView.tsx`
+  - `packages/desktop/src/lib/types.ts`
+  - `CHANGELOG.md`
+
 ## [feat/cli-companion] - 2026-10-02 (Cross-Platform CLI Hotkeys, Unix Raw Mode, Process Group Detachment & Desktop Crate Rename)
 - **Feature Summary**:
   - **CLI Terminal Raw Mode & Hotkey Lifecycle (`packages/cli/src/ui.rs`, `commands/tunnel.rs`, `commands/inspect.rs`)**: Implemented RAII `RawModeGuard` checking `stdin().is_terminal()` and preserving Unix terminal post-processing (`libc::OPOST | libc::ONLCR`) to prevent raw-mode newline staircasing. Resolves POSIX cooked-mode stdin buffering on Linux and macOS so single-key interactive hotkeys (`o`, `c`, `q`, `s`, `t`, `l`, `h`) trigger immediately on keypress.

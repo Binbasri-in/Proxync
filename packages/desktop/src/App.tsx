@@ -15,7 +15,7 @@ import {
   syncOpenApiWithPayload,
   generateDriftBugReportMarkdown,
 } from './lib/schemaDriftDetector';
-import type { SchemaDriftReport } from './lib/types';
+import type { SchemaDriftReport, BasicAuthConfig } from './lib/types';
 import {
   api,
   ensureLocalWorkspace,
@@ -263,7 +263,26 @@ export default function App() {
 
   useEffect(() => {
     if (activeTunnel) {
-      localStorage.setItem(ACTIVE_TUNNEL_KEY, JSON.stringify(activeTunnel));
+      // CWE-312 / CodeQL: Do not persist sensitive credentials (e.g. basicAuth password) to unencrypted localStorage
+      const persistableTunnel: Tunnel = {
+        id: activeTunnel.id,
+        publicUrl: activeTunnel.publicUrl,
+        localPort: activeTunnel.localPort,
+        status: activeTunnel.status,
+        subdomain: activeTunnel.subdomain,
+        customDomain: activeTunnel.customDomain,
+        createdAt: activeTunnel.createdAt,
+        provider: activeTunnel.provider,
+        ...(activeTunnel.basicAuth
+          ? {
+              basicAuth: {
+                enabled: activeTunnel.basicAuth.enabled,
+                username: activeTunnel.basicAuth.username,
+              },
+            }
+          : {}),
+      };
+      localStorage.setItem(ACTIVE_TUNNEL_KEY, JSON.stringify(persistableTunnel));
     } else {
       localStorage.removeItem(ACTIVE_TUNNEL_KEY);
     }
@@ -1857,7 +1876,7 @@ export default function App() {
 
 
 
-  async function shareProcessCloudflare(process: ProcessCandidate) {
+  async function shareProcessCloudflare(process: ProcessCandidate, basicAuth?: BasicAuthConfig) {
     if (!activeWorkspace) return;
     const existingActive = tunnels.find((t) => t.localPort === process.port && t.status === 'ACTIVE');
     if (existingActive) {
@@ -1905,9 +1924,12 @@ export default function App() {
       const tunnel = await api.tunnels.create(targetWorkspaceId, process.port, 'http', undefined);
       const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:3939') as string;
       const relayUrl = `${apiBase.replace(/^http/, 'ws')}/relay`;
+      const basicAuthHeader = basicAuth?.enabled && basicAuth.username.trim() && basicAuth.password?.trim()
+        ? `${basicAuth.username.trim()}:${basicAuth.password.trim()}`
+        : undefined;
       const [, proxyPort] = await Promise.all([
         invoke('open_tunnel', { tunnelId: tunnel.id, localPort: process.port, token, workspaceId: targetWorkspaceId, relayUrl }).catch(() => undefined),
-        invoke<number>('start_proxy', { localPort: process.port }).catch(() => process.port),
+        invoke<number>('start_proxy', { localPort: process.port, basicAuth: basicAuthHeader }).catch(() => process.port),
       ]);
       logTunnelSessionStart({
         provider: 'Cloudflare Tunnel',
@@ -1921,7 +1943,7 @@ export default function App() {
       showToast('Starting Cloudflare Tunnel service...', 'info');
       const cfTunnelUrl = await invoke<string>('open_cloudflare_tunnel', { tunnelId: tunnel.id, localPort: proxyPort });
 
-      const cloudflareBoundTunnel: Tunnel = { ...tunnel, publicUrl: cfTunnelUrl, subdomain: cfTunnelUrl.replace('https://', '').replace('.trycloudflare.com', ''), provider: 'cloudflare' };
+      const cloudflareBoundTunnel: Tunnel = { ...tunnel, publicUrl: cfTunnelUrl, subdomain: cfTunnelUrl.replace('https://', '').replace('.trycloudflare.com', ''), provider: 'cloudflare', basicAuth };
       setActiveTunnel(cloudflareBoundTunnel);
       setTunnels((current) => [cloudflareBoundTunnel, ...current.filter((item) => item.id !== tunnel.id)]);
       setSelectedProcessId(process.id); setMainView('process'); setDiscoverOpen(false);
@@ -1946,7 +1968,7 @@ export default function App() {
     return `${prefix}-${rand}`;
   }
 
-  async function shareProcessNative(process: ProcessCandidate) {
+  async function shareProcessNative(process: ProcessCandidate, basicAuth?: BasicAuthConfig) {
     if (!activeWorkspace) return;
     const existingActive = tunnels.find((t) => t.localPort === process.port && t.status === 'ACTIVE');
     if (existingActive) {
@@ -1986,9 +2008,12 @@ export default function App() {
       const tunnel = await api.tunnels.create(targetWorkspaceId, process.port, 'http', undefined);
       const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:3939') as string;
       const relayUrl = `${apiBase.replace(/^http/, 'ws')}/relay`;
+      const basicAuthHeader = basicAuth?.enabled && basicAuth.username.trim() && basicAuth.password?.trim()
+        ? `${basicAuth.username.trim()}:${basicAuth.password.trim()}`
+        : undefined;
       const [, proxyPort] = await Promise.all([
         invoke('open_tunnel', { tunnelId: tunnel.id, localPort: process.port, token, workspaceId: targetWorkspaceId, relayUrl }).catch(() => undefined),
-        invoke<number>('start_proxy', { localPort: process.port }).catch(() => process.port),
+        invoke<number>('start_proxy', { localPort: process.port, basicAuth: basicAuthHeader }).catch(() => process.port),
       ]);
       logTunnelSessionStart({
         provider: 'Proxync Native SSH',
@@ -2002,7 +2027,7 @@ export default function App() {
       const suggestedSub = generateRandomSubdomain('px');
       showToast('Starting Proxync Native SSH tunnel...', 'info');
       const nativeTunnelUrl = await invoke<string>('open_native_tunnel', { tunnelId: tunnel.id, localPort: proxyPort, subdomain: suggestedSub });
-      const boundTunnel: Tunnel = { ...tunnel, publicUrl: nativeTunnelUrl, subdomain: suggestedSub, provider: 'native' };
+      const boundTunnel: Tunnel = { ...tunnel, publicUrl: nativeTunnelUrl, subdomain: suggestedSub, provider: 'native', basicAuth };
       setActiveTunnel(boundTunnel);
       setTunnels((current) => [boundTunnel, ...current.filter((item) => item.id !== tunnel.id)]);
       setSelectedProcessId(process.id); setMainView('process'); setDiscoverOpen(false);
@@ -2019,7 +2044,7 @@ export default function App() {
   }
 
 
-  async function shareProcess(process: ProcessCandidate, customDomain?: string) {
+  async function shareProcess(process: ProcessCandidate, customDomain?: string, basicAuth?: BasicAuthConfig) {
     if (!activeWorkspace) return;
     const existingActive = tunnels.find((t) => t.localPort === process.port && t.status === 'ACTIVE');
     if (existingActive) {
@@ -2080,7 +2105,10 @@ export default function App() {
         selectedProfileId: makeProfileId(process),
         languageHint: detectLanguageLabel(process),
       }));
-      const proxyPort = await invoke<number>('start_proxy', { localPort: process.port }).catch(() => process.port);
+      const basicAuthHeader = basicAuth?.enabled && basicAuth.username.trim() && basicAuth.password?.trim()
+        ? `${basicAuth.username.trim()}:${basicAuth.password.trim()}`
+        : undefined;
+      const proxyPort = await invoke<number>('start_proxy', { localPort: process.port, basicAuth: basicAuthHeader }).catch(() => process.port);
       logTunnelSessionStart({
         provider: customDomain ? `Custom Domain (${customDomain})` : 'Local Proxy',
         localPort: process.port,
@@ -2091,6 +2119,7 @@ export default function App() {
         workspaceId: targetWorkspaceId,
       });
       const tunnel = await api.tunnels.create(targetWorkspaceId, process.port, 'http', undefined, customDomain);
+      tunnel.basicAuth = basicAuth;
       if (customDomain) {
         tunnel.publicUrl = customDomain.includes(':') ? customDomain : `http://${customDomain}:${proxyPort}`;
         tunnel.customDomain = customDomain;
@@ -3731,17 +3760,17 @@ export default function App() {
           process={sharingProcessCandidate}
           domains={domains.filter((d) => d.verified)}
           onClose={() => setSharingProcessCandidate(null)}
-          onConfirm={(selectedOption) => {
+          onConfirm={(selectedOption, basicAuth) => {
             if (selectedOption === 'proxync_native') {
-              void shareProcessNative(sharingProcessCandidate);
+              void shareProcessNative(sharingProcessCandidate, basicAuth);
             } else if (selectedOption === 'cloudflare') {
-              void shareProcessCloudflare(sharingProcessCandidate);
+              void shareProcessCloudflare(sharingProcessCandidate, basicAuth);
             } else if (selectedOption === 'custom_subdomain_unconnected' || selectedOption === 'default') {
               showToast('⚠️ Subdomain not connected. Please add and verify your custom subdomain in Settings → Custom Domains.', 'warning');
               setSettingsSection('domains');
               setMainView('settings');
             } else {
-              void shareProcess(sharingProcessCandidate, selectedOption);
+              void shareProcess(sharingProcessCandidate, selectedOption, basicAuth);
             }
             setSharingProcessCandidate(null);
           }}

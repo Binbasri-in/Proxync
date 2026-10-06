@@ -268,6 +268,14 @@ export function WelcomeView({
                                   <h4 className="font-body-lg text-body-lg text-on-surface truncate max-w-[140px] xs:max-w-[200px] sm:max-w-[320px] md:max-w-[440px] lg:max-w-[560px]" title={hostname || tunnel.publicUrl}>
                                     {hostname || tunnel.publicUrl}
                                   </h4>
+                                  {tunnel.basicAuth?.enabled && (
+                                    <span
+                                      className="flex items-center text-amber-400 shrink-0"
+                                      title={`Protected with Basic Auth (${tunnel.basicAuth.username})`}
+                                    >
+                                      <span className="material-symbols-outlined text-[15px]">lock</span>
+                                    </span>
+                                  )}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -329,6 +337,22 @@ export function WelcomeView({
                                 <span className="material-symbols-outlined text-[16px]">content_copy</span>
                                 Copy Public URL
                               </button>
+
+                              {tunnel.basicAuth?.enabled && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const cred = `${tunnel.basicAuth?.username}:${tunnel.basicAuth?.password || ''}`;
+                                    navigator.clipboard.writeText(cred);
+                                    setActiveMenuTunnelId(null);
+                                    showToast(`Credentials copied for ${tunnel.basicAuth?.username}`, 'success');
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 w-full text-left text-xs text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">key</span>
+                                  Copy Credentials
+                                </button>
+                              )}
 
                               {onInspectTraffic && (
                                 <button

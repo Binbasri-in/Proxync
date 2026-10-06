@@ -386,6 +386,14 @@ export function ProcessView({
                         <span className={`px-1.5 py-0.2 ${isStandby ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'} text-[9.5px] font-mono rounded font-semibold shrink-0`}>
                           {isStandby ? 'Standby' : 'Live'}
                         </span>
+                        {tunnel.basicAuth?.enabled && (
+                          <span
+                            className="flex items-center text-amber-400 shrink-0"
+                            title={`Protected with Basic Auth (${tunnel.basicAuth.username})`}
+                          >
+                            <span className="material-symbols-outlined text-[15px]">lock</span>
+                          </span>
+                        )}
                       </div>
                       <code
                         onClick={() => handleOpenUrl(tunnel.publicUrl)}
@@ -396,6 +404,18 @@ export function ProcessView({
                       </code>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {tunnel.basicAuth?.enabled && (
+                        <button
+                          onClick={() => {
+                            const cred = `${tunnel.basicAuth?.username}:${tunnel.basicAuth?.password || ''}`;
+                            onCopy(cred, `Credentials copied for ${tunnel.basicAuth?.username}`);
+                          }}
+                          className="btn-ghost compact cursor-pointer hover:bg-surface-container-high rounded text-on-surface-variant hover:text-primary transition-colors"
+                          title={`Copy Credentials (${tunnel.basicAuth.username})`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">key</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => handleOpenUrl(tunnel.publicUrl)}
                         className="btn-ghost compact cursor-pointer hover:bg-surface-container-high rounded text-primary hover:text-primary/80 transition-colors"
