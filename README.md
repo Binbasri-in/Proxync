@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Inilax/Proxync/releases"><img src="https://img.shields.io/badge/version-v0.2.3-blue?style=flat" alt="Version v0.2.3" /></a>&nbsp;
+  <a href="https://github.com/Inilax/Proxync/releases"><img src="https://img.shields.io/badge/version-v0.2.4-blue?style=flat" alt="Version v0.2.4" /></a>&nbsp;
   <a href="https://github.com/Inilax/Proxync"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat" alt="Platform: Windows | Linux | macOS" /></a>&nbsp;
   <a href="https://github.com/Inilax/Proxync/stargazers"><img src="https://img.shields.io/github/stars/Inilax/Proxync?style=flat" alt="Stars" /></a>&nbsp;
   <a href="https://github.com/Inilax/Proxync/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Inilax/Proxync?style=flat" alt="License" /></a>&nbsp;
@@ -59,6 +59,34 @@ Proxync is engineered with [Tauri v2](https://v2.tauri.app/) and Rust for minima
 | **Windows** | Windows 10 / 11 (`x64`) | `.msi`, NSIS Setup `.exe` | `%APPDATA%\Proxync\` (`AppData/Roaming/Proxync/`) | Supported |
 | **Linux** | Ubuntu, Debian, Fedora, Arch (`x64`) | `.deb`, `.AppImage` | `~/.config/Proxync/` | Supported |
 | **macOS** | Apple Silicon & Intel (`arm64`, `x64`) | `.dmg`, `.app` | `~/Library/Application Support/Proxync/` | Supported |
+
+---
+
+### ⚡ Quick Install (One-Liner)
+
+Install the standalone Proxync CLI directly in your terminal:
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://proxync.dev/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://proxync.dev/install.ps1 | iex
+```
+
+**Windows (Command Prompt / CMD):**
+```cmd
+powershell -c "irm https://proxync.dev/install.ps1 | iex"
+```
+
+**Windows (via built-in curl):**
+```cmd
+curl -fsSL https://proxync.dev/download/cli/windows -o proxync.exe && proxync.exe setup-path
+```
+
+> *Tip: To also install the Desktop GUI application alongside the CLI, append `--gui` on Unix or `-Gui` on Windows.*
 
 ---
 
