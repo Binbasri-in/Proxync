@@ -224,6 +224,8 @@ jobs:
             if (conf.app && Array.isArray(conf.app.windows)) {
               conf.app.windows.forEach(w => {
                 w.decorations = true;
+                w.titleBarStyle = "Overlay";
+                w.hiddenTitle = true;
               });
             }
             fs.writeFileSync(confPath, JSON.stringify(conf, null, 2) + "\n");
